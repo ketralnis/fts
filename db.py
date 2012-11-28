@@ -1,10 +1,14 @@
 import sqlite3
-# import os.path
+import os.path
+import logging
 
-dbpath = 'fts.db' # os.path.join(os.environ.get('HOME', '.'), '.fts.db')
-conn = sqlite3.connect(dbpath)
+_db_name = '.fts.db'
 
-def createschema(c):
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
+
+def createschema(c, root):
     c.execute("""
         CREATE TABLE IF NOT EXISTS
         config (
@@ -12,33 +16,12 @@ def createschema(c):
             value
         );
     """)
-
-    # c.execute("""
-    #     CREATE TABLE IF NOT EXISTS
-    #     exclusions (
-    #         key TEXT PRIMARY KEY,
-    #         value
-    #     );
-    # """)
+    c.execute("INSERT INTO config(key, value) VALUES('root', ?);", (root,))
 
     c.execute("""
         CREATE TABLE IF NOT EXISTS
-        databases (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT,
-            UNIQUE(name)
-        );
-    """)
-    c.execute("CREATE INDEX IF NOT EXISTS databases_name_idx ON databases(name);")
-
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS
-        dbconfig (
-            dbid,
-            key TEXT,
-            value,
-            PRIMARY KEY (dbid, key),
-            FOREIGN KEY(dbid) REFERENCES databases(id)
+        exclusions (
+            prefix TEXT PRIMARY KEY
         );
     """)
 
@@ -46,15 +29,14 @@ def createschema(c):
     c.execute("""
         CREATE TABLE IF NOT EXISTS
         files (
-            docid INTEGER PRIMARY KEY AUTOINCREMENT,
-            dbid INTEGER,
-            path,
-            last_modified INTEGER,
-            FOREIGN KEY(dbid) REFERENCES databases(id)
+            docid         INTEGER PRIMARY KEY AUTOINCREMENT,
+            path NOT NULL,
+            last_modified INTEGER NOT NULL
         );
     """)
-    c.execute("CREATE UNIQUE INDEX IF NOT EXISTS files_dbid_path_idx ON files(dbid, path);")
+    c.execute("CREATE UNIQUE INDEX IF NOT EXISTS files_path_idx ON files(path);")
 
+    # normally we'd use "IF NOT EXISTS" but fts4 doesn't support it
     if not c.execute("SELECT DISTINCT tbl_name FROM sqlite_master WHERE tbl_name = 'files_fts'").fetchall():
         # has an invisible docid column
         c.execute("""
@@ -63,30 +45,54 @@ def createschema(c):
                 body TEXT);
         """)
 
-c = conn.cursor()
-try:
-    createschema(c)
-finally:
-    c.close()
-del c
+def connect(fname):
+    conn = sqlite3.connect(fname)
+    conn.text_factory=str
+    conn.isolation_level = 'EXCLUSIVE'
+    return conn
 
-def get_or_createdb(c, name):
+class NoDB(Exception):
+    pass
+
+def finddb(initroot, root = None):
+    # 'root' must be an absolute path
+
+    if root is None:
+        root = initroot
+
+    initroot = initroot.rstrip('/')
+    root = root.rstrip('/')
+
+    dbfname = os.path.join(root, _db_name)
+    if os.path.exists(dbfname):
+        assert initroot.startswith(root)
+
+        conn = connect(dbfname)
+        return root, root[len(initroot)+1:], conn
+
+    if root == '/':
+        raise NoDB()
+
+    components = os.path.split(root)
+    parentcomponents = components[:-1]
+    parent = os.path.join(parentcomponents)
+
+    return finddb(initroot, parent)
+
+def createdb(root):
+    # 'root' must be an absolute path
+    dbfname = os.path.join(root, _db_name)
+    conn = connect(dbfname)
+    c = conn.cursor()
     try:
-        c.execute("INSERT INTO databases(name) values(?)", (name,))
-        return c.lastrowid
-    except sqlite3.IntegrityError:
-        return c.execute("SELECT id FROM databases WHERE name=?", (name,)).fetchone()[0]
+        createschema(c, root)
+        return dbfname, conn
+    finally:
+        c.close()
 
-def createdb(c, name):
-    c.execute("INSERT INTO databases(name) values(?)", (name,))
-    return c.lastrowid
-
-def getdbid(c, name):
-    return c.execute("SELECT id FROM databases WHERE name=?", (name,)).fetchone()[0]
-
-def add_document(c, dbid, fname, last_modified, content):
-    c.execute("INSERT INTO files(docid, dbid, path, last_modified) VALUES(NULL, ?, ?, ?)",
-               (dbid, fname, last_modified))
+def add_document(c, fname, last_modified, content):
+    c.execute("INSERT INTO files(docid, path, last_modified) VALUES(NULL, ?, ?)",
+               (fname, last_modified))
     docid = c.lastrowid
     c.execute("INSERT INTO files_fts(docid, body) VALUES(?, ?)",
                (docid, content))

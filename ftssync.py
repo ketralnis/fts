@@ -1,14 +1,17 @@
+import sys
+import os
 import os.path
 import stat
 import logging
 
-from db import update_document, add_document
-from db import conn
+from db import update_document, add_document, _db_name, finddb
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-def sync(dbid, path):
+ignores = set(['.git', _db_name])
+
+def sync(conn, path):
     with conn: # transaction
         news = updates = deletes = 0
         c = conn.cursor() # the cursor we use for reading
@@ -18,7 +21,7 @@ def sync(dbid, path):
             c.execute("""
                       CREATE TEMPORARY TABLE
                       ondisk (
-                         path TEXT PRIMARY KEY,
+                         path          TEXT PRIMARY KEY,
                          last_modified INTEGER
                       );
                       """)
@@ -26,12 +29,24 @@ def sync(dbid, path):
             def visitor(arg, dirname, fnames):
                 assert arg is None
 
+                removals = []
+                for fname in fnames:
+                    if fname in ignores:
+                        removals.append(fname)
+                for r in removals:
+                    fnames.remove(r)
+
                 for sname in fnames:
+                    if sname in ignores:
+                        continue
+
                     fname = os.path.join(dirname, sname)
                     st = os.stat(fname)
                     mode = st.st_mode
+                    if stat.S_ISDIR(mode):
+                        continue
                     if not stat.S_ISREG(mode):
-                        logging.warn("Skipping non-regular file %s (%s)", fname, mode | stat.S_IFMT)
+                        logging.warn("Skipping non-regular file %s (%s)", fname, stat.S_IFMT(mode))
                         continue
                     cu.execute("INSERT INTO ondisk(path, last_modified) VALUES (?, ?)",
                               (fname, int(st[stat.ST_MTIME])))
@@ -45,10 +60,9 @@ def sync(dbid, path):
             c.execute("""
                 SELECT f.docid, f.path, od.last_modified
                   FROM ondisk od, files f
-                 WHERE f.dbid = ?
-                   AND od.path = f.path
+                 WHERE od.path = f.path
                    AND f.last_modified < od.last_modified
-            """, (dbid,))
+            """)
             for (docid, fname, last_modified) in c:
                 update_document(cu, docid, last_modified, open(fname).read())
                 updates += 1
@@ -59,8 +73,7 @@ def sync(dbid, path):
                       SELECT f.docid
                         FROM files f
                        WHERE f.path NOT IN (SELECT path FROM ondisk od)
-                         AND f.dbid = ?
-            """, (dbid,))
+            """)
             c.execute("""
                 DELETE FROM files WHERE docid IN (SELECT docid FROM deletedocs);
             """)
@@ -76,13 +89,12 @@ def sync(dbid, path):
             c.execute("""
                  SELECT od.path, od.last_modified
                    FROM ondisk od
-                  WHERE od.path NOT IN (SELECT path FROM files f WHERE f.dbid = ?)
-            """, (dbid,))
-
+                  WHERE od.path NOT IN (SELECT path FROM files)
+            """)
             for (fname, last_modified) in c:
                 # TODO: is it safe to re-use the last_modified that we got before,
                 # or do we need to re-stat() the file?
-                add_document(cu, dbid, fname, last_modified, open(fname).read())
+                add_document(cu, fname, last_modified, open(fname).read())
                 news += 1
 
             return (news, deletes, updates)
@@ -90,3 +102,10 @@ def sync(dbid, path):
         finally:
             c.close()
             cu.close()
+
+def main():
+    root, prefix, conn = finddb(os.getcwd())
+    sync(conn, root)
+
+if __name__ == '__main__':
+    main()
