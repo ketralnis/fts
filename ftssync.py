@@ -1,4 +1,5 @@
-import sys
+#!/usr/bin/env python
+
 import os
 import os.path
 import stat
