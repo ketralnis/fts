@@ -8,7 +8,10 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
-def createschema(c, root):
+def createschema(c):
+    # TODO: make everything case insensitive
+    # TODO: track file hashes so that we can avoid reindexing renamed files
+
     c.execute("""
         CREATE TABLE IF NOT EXISTS
         config (
@@ -16,7 +19,6 @@ def createschema(c, root):
             value
         );
     """)
-    c.execute("INSERT INTO config(key, value) VALUES('root', ?);", (root,))
 
     c.execute("""
         CREATE TABLE IF NOT EXISTS
@@ -49,6 +51,7 @@ def connect(fname):
     conn = sqlite3.connect(fname)
     conn.text_factory=str
     conn.isolation_level = 'EXCLUSIVE'
+    conn.execute('PRAGMA case_sensitive_like=ON;')
     return conn
 
 class NoDB(Exception):
@@ -68,14 +71,15 @@ def finddb(initroot, root = None):
         assert initroot.startswith(root)
 
         conn = connect(dbfname)
-        return root, root[len(initroot)+1:], conn
+        prefix = initroot[len(root)+1:]
+        return root, prefix, conn
 
     if root == '/':
         raise NoDB()
 
     components = os.path.split(root)
     parentcomponents = components[:-1]
-    parent = os.path.join(parentcomponents)
+    parent = os.path.join(*parentcomponents)
 
     return finddb(initroot, parent)
 
@@ -85,10 +89,14 @@ def createdb(root):
     conn = connect(dbfname)
     c = conn.cursor()
     try:
-        createschema(c, root)
+        createschema(c)
         return dbfname, conn
     finally:
         c.close()
+
+def prefix_expr(prefix):
+    prefixexpr = prefix.replace('\\', '\\\\').replace('%', '\\%',).replace('_', '\\_') + '%'
+    return prefixexpr
 
 def add_document(c, fname, last_modified, content):
     c.execute("INSERT INTO files(docid, path, last_modified) VALUES(NULL, ?, ?)",
