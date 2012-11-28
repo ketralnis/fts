@@ -26,7 +26,7 @@ def search(conn, prefix, term):
                    AND ft.body MATCH ?
            """, (prefix, prefixexpr, term,))
             for (path, ) in c:
-                yield path[len(prefix)+1:]
+                yield path[len(prefix)+1:] if prefix else path
         finally:
             c.close()
 
