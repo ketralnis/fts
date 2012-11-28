@@ -13,6 +13,14 @@ def createschema(c):
         );
     """)
 
+    # c.execute("""
+    #     CREATE TABLE IF NOT EXISTS
+    #     exclusions (
+    #         key TEXT PRIMARY KEY,
+    #         value
+    #     );
+    # """)
+
     c.execute("""
         CREATE TABLE IF NOT EXISTS
         databases (
@@ -29,8 +37,8 @@ def createschema(c):
             dbid,
             key TEXT,
             value,
-            PRIMARY KEY (dbid, key)
-            --FOREIGN KEY dbid REFERENCES databases(id)
+            PRIMARY KEY (dbid, key),
+            FOREIGN KEY(dbid) REFERENCES databases(id)
         );
     """)
 
@@ -41,8 +49,8 @@ def createschema(c):
             docid INTEGER PRIMARY KEY AUTOINCREMENT,
             dbid INTEGER,
             path,
-            last_modified INTEGER
-            --FOREIGN KEY dbid REFERENCES databases(id)
+            last_modified INTEGER,
+            FOREIGN KEY(dbid) REFERENCES databases(id)
         );
     """)
     c.execute("CREATE UNIQUE INDEX IF NOT EXISTS files_dbid_path_idx ON files(dbid, path);")
