@@ -46,5 +46,9 @@ def main():
         if args.rm or args.re or args.glob or args.simple:
             logger.warning("You may need to resync")
 
+    # TODO: we can tell them that they need to resync, but we should also
+    # automatically remove DB items that they've just now excluded (so that they
+    # only have to resync on *removing* an exclusion)
+
 if __name__ == '__main__':
     main()

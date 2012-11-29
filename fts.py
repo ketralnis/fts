@@ -20,13 +20,14 @@ def search(conn, prefix, term):
         try:
             prefix = prefix or ''
             prefixexpr = prefix_expr(prefix)
+            needsync = 0
             c.execute("""
                 SELECT f.path, f.last_modified
                   FROM files f, files_fts ft
                  WHERE f.docid = ft.docid
                    AND (? = '' OR f.path LIKE ? ESCAPE '\\') -- use the prefix if present
                    AND ft.body MATCH ?
-           """, (prefix, prefixexpr, term,))
+            """, (prefix, prefixexpr, term,))
             for (path, last_modified) in c:
 
                 if prefix:
@@ -34,7 +35,7 @@ def search(conn, prefix, term):
 
                 shortpath = path[len(prefix)+1:] if prefix else path
 
-                needsync = 0
+
 
                 try:
                     st = os.stat(shortpath)
