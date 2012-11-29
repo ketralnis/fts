@@ -23,9 +23,12 @@ def createschema(c):
     c.execute("""
         CREATE TABLE IF NOT EXISTS
         exclusions (
-            prefix TEXT PRIMARY KEY
+            expression TEXT PRIMARY KEY
         );
     """)
+    c.execute("INSERT INTO exclusions(expression) VALUES('*.pyc')")
+    c.execute("INSERT INTO exclusions(expression) VALUES('.git/*')")
+    c.execute("INSERT INTO exclusions(expression) VALUES(?)", (_db_name,))
 
     # docid references the files_fts
     c.execute("""

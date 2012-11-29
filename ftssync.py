@@ -5,12 +5,10 @@ import os.path
 import stat
 import logging
 
-from db import update_document, add_document, _db_name, finddb, prefix_expr
+from db import update_document, add_document, finddb, prefix_expr
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
-
-ignores = set(['.git', _db_name])
 
 def sync(conn, path, prefix):
     # path must be a full path on disk
@@ -34,17 +32,7 @@ def sync(conn, path, prefix):
             def visitor(arg, dirname, fnames):
                 assert arg is None
 
-                removals = []
-                for fname in fnames:
-                    if fname in ignores:
-                        removals.append(fname)
-                for r in removals:
-                    fnames.remove(r)
-
                 for sname in fnames:
-                    if sname in ignores:
-                        continue
-
                     fname = os.path.join(dirname, sname)
 
                     assert fname.startswith(path)
@@ -60,6 +48,7 @@ def sync(conn, path, prefix):
                     if not stat.S_ISREG(mode):
                         logging.warn("Skipping non-regular file %s (%s)", dbfname, stat.S_IFMT(mode))
                         continue
+
                     cu.execute("INSERT INTO ondisk(path, dbpath, last_modified) VALUES (?, ?, ?)",
                                (fname, dbfname, int(st[stat.ST_MTIME])))
 
@@ -67,6 +56,14 @@ def sync(conn, path, prefix):
             if prefix:
                 wpath = os.path.join(path, prefix)
             os.path.walk(wpath, visitor, None)
+
+            # ignore anyone that matches our ignore globs
+            cu.execute("""
+                DELETE FROM ondisk WHERE path in
+                (SELECT od.path
+                   FROM ondisk od, exclusions e
+                  WHERE od.path GLOB e.expression)
+            """)
 
             # now build three groups: new files to be added, missing files to be
             # deleted, and old files to be updated
@@ -126,6 +123,8 @@ def sync(conn, path, prefix):
 
 def main():
     # TODO: verbose sync
+
+    # TODO: tool to selectively update specific files
     root, prefix, conn = finddb(os.getcwd())
     sync(conn, root, prefix)
 
