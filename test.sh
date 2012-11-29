@@ -11,8 +11,9 @@ rm -f .fts.db
 echo creating initial db
 ftsinit
 
-echo test search
-fts $(cat $(ls rando/* | unsort | head -n 1) | unsort | head -n 1)
+search=$(cat $(ls rando/* | unsort | head -n 1) | unsort | head -n 1)
+echo test search "($search)"
+fts "$search"
 
 echo more data
 ./rando.sh | sed 's/^/    /'
@@ -25,7 +26,8 @@ echo more data
 pushd rando > /dev/null
     echo sync from in rando
     ftssync
-    echo search from in rando
-    fts $(cat $(ls | unsort | head -n 1) | unsort | head -n 1)
+    search=$(cat $(ls | unsort | head -n 1) | unsort | head -n 1)
+    echo search from in rando "($search)"
+    fts "$search"
 popd > /dev/null
 

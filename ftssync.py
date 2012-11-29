@@ -3,12 +3,8 @@
 import os
 import os.path
 import stat
-import logging
 
-from db import update_document, add_document, finddb, prefix_expr
-
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+from db import update_document, add_document, finddb, prefix_expr, logger
 
 def sync(conn, path, prefix):
     # path must be a full path on disk
@@ -46,7 +42,7 @@ def sync(conn, path, prefix):
                     if stat.S_ISDIR(mode):
                         continue
                     if not stat.S_ISREG(mode):
-                        logging.warn("Skipping non-regular file %s (%s)", dbfname, stat.S_IFMT(mode))
+                        logger.warn("Skipping non-regular file %s (%s)", dbfname, stat.S_IFMT(mode))
                         continue
 
                     cu.execute("INSERT INTO ondisk(path, dbpath, last_modified) VALUES (?, ?, ?)",
@@ -57,13 +53,15 @@ def sync(conn, path, prefix):
                 wpath = os.path.join(path, prefix)
             os.path.walk(wpath, visitor, None)
 
-            # ignore anyone that matches our ignore globs
+            # remove anyone that matches our ignore globs
             cu.execute("""
                 DELETE FROM ondisk WHERE path in
                 (SELECT od.path
                    FROM ondisk od, exclusions e
-                  WHERE od.path GLOB e.expression)
-            """)
+                  WHERE (e.type = 'glob'   AND od.path GLOB   e.expression)
+                     OR (e.type = 're'     AND od.path REGEXP e.expression)
+                     OR (e.type = 'simple' AND BASENAME(od.path) = e.expression)
+             )""")
 
             # now build three groups: new files to be added, missing files to be
             # deleted, and old files to be updated
@@ -76,6 +74,7 @@ def sync(conn, path, prefix):
                    AND f.last_modified < od.last_modified
             """)
             for (docid, path, last_modified) in c:
+                logger.debug("Updating %r", path)
                 update_document(cu, docid, last_modified, open(path).read())
                 updates += 1
 
@@ -115,7 +114,7 @@ def sync(conn, path, prefix):
                 add_document(cu, dbpath, last_modified, open(fname).read())
                 news += 1
 
-            return (news, deletes, updates)
+            logger.info("%d new documents, %d deletes, %d updates", news, deletes, updates)
 
         finally:
             c.close()

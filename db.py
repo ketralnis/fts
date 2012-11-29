@@ -2,10 +2,15 @@ import sqlite3
 import os.path
 import logging
 
+try:
+    import re2 as re
+except ImportError:
+    import re
+
 _db_name = '.fts.db'
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger("fts")
 
 
 def createschema(c):
@@ -23,12 +28,14 @@ def createschema(c):
     c.execute("""
         CREATE TABLE IF NOT EXISTS
         exclusions (
-            expression TEXT PRIMARY KEY
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            type TEXT NOT NULL,
+            expression TEXT NOT NULL
         );
     """)
-    c.execute("INSERT INTO exclusions(expression) VALUES('*.pyc')")
-    c.execute("INSERT INTO exclusions(expression) VALUES('.git/*')")
-    c.execute("INSERT INTO exclusions(expression) VALUES(?)", (_db_name,))
+    c.execute("INSERT INTO exclusions(type, expression) VALUES('glob', '*.pyc')")
+    c.execute("INSERT INTO exclusions(type, expression) VALUES('simple', ?)", (_db_name,))
+    c.execute("INSERT INTO exclusions(type, expression) VALUES('re', '(^|.*/)\.git/.*')")
 
     # docid references the files_fts
     c.execute("""
@@ -50,11 +57,22 @@ def createschema(c):
                 body TEXT);
         """)
 
+def regexp(expr, item):
+    reg = re.compile(expr)
+    return reg.search(item) is not None
+
 def connect(fname):
     conn = sqlite3.connect(fname)
     conn.text_factory=str
     conn.isolation_level = 'EXCLUSIVE'
     conn.execute('PRAGMA case_sensitive_like=ON;')
+
+    # install our regex engine
+    conn.create_function("REGEXP", 2, regexp)
+
+    # install our regex engine
+    conn.create_function("BASENAME", 1, os.path.basename)
+
     return conn
 
 class NoDB(Exception):
