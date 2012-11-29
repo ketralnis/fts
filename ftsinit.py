@@ -10,8 +10,6 @@ def main():
     dbfname, conn = createdb(cwd)
     logger.info("Created %s", dbfname)
 
-    # TODO: verbose sync
-
     # add the initial documents
     sync(conn, cwd, '')
 

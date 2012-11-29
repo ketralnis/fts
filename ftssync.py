@@ -110,24 +110,19 @@ def sync(conn, path, prefix):
                   WHERE od.dbpath NOT IN (SELECT path FROM files)
             """)
             for (fname, dbpath, last_modified) in c:
-                # TODO: is it safe to re-use the last_modified that we got before,
-                # or do we need to re-stat() the file?
+                # is it safe to re-use the last_modified that we got before, or
+                # do we need to re-stat() the file?
                 logger.debug("Adding new file %r", fname)
                 add_document(cu, dbpath, last_modified, open(fname).read())
                 news += 1
 
             logger.info("%d new documents, %d deletes, %d updates", news, deletes, updates)
 
-            # TODO: vacuum? analyze?
-
         finally:
             c.close()
             cu.close()
 
 def main():
-    # TODO: verbose sync
-
-    # TODO: tool to selectively update specific files
     root, prefix, conn = finddb(os.getcwd())
     sync(conn, root, prefix)
 

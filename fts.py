@@ -8,13 +8,6 @@ from ftsdb import logger
 from ftsdb import finddb, prefix_expr
 
 def search(conn, prefix, term):
-    # TODO: do a pass over the results to see if the files still exist and if
-    # last_modified has changed
-
-    # TODO: get matchinfo and optionally display matches
-
-    # TODO: cmdline switches to display the full path instead of the relative path
-
     with conn:
         c = conn.cursor()
         try:
