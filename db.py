@@ -28,9 +28,9 @@ def createschema(c):
     c.execute("""
         CREATE TABLE IF NOT EXISTS
         exclusions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            type TEXT NOT NULL,
-            expression TEXT NOT NULL
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            type       TEXT NOT NULL COLLATE BINARY,
+            expression TEXT NOT NULL COLLATE BINARY
         );
     """)
     c.execute("INSERT INTO exclusions(type, expression) VALUES('glob', '*.pyc')")
@@ -42,7 +42,7 @@ def createschema(c):
         CREATE TABLE IF NOT EXISTS
         files (
             docid         INTEGER PRIMARY KEY AUTOINCREMENT,
-            path NOT NULL,
+            path          NOT NULL COLLATE BINARY,
             last_modified INTEGER NOT NULL
         );
     """)
@@ -54,7 +54,7 @@ def createschema(c):
         c.execute("""
             CREATE VIRTUAL TABLE
             files_fts USING fts4 (
-                body TEXT);
+                body TEXT COLLATE BINARY);
         """)
 
 def regexp(expr, item):

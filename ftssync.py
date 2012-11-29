@@ -19,8 +19,8 @@ def sync(conn, path, prefix):
             c.execute("""
                       CREATE TEMPORARY TABLE
                       ondisk (
-                         path          TEXT PRIMARY KEY,
-                         dbpath        TEXT,
+                         path          TEXT PRIMARY KEY COLLATE BINARY,
+                         dbpath        TEXT COLLATE BINARY,
                          last_modified INTEGER
                       );
                       """)
@@ -62,6 +62,7 @@ def sync(conn, path, prefix):
                      OR (e.type = 're'     AND od.path REGEXP e.expression)
                      OR (e.type = 'simple' AND BASENAME(od.path) = e.expression)
              )""")
+            logger.debug("Ignored %d files", cu.rowcount)
 
             # now build three groups: new files to be added, missing files to be
             # deleted, and old files to be updated
@@ -111,6 +112,7 @@ def sync(conn, path, prefix):
             for (fname, dbpath, last_modified) in c:
                 # TODO: is it safe to re-use the last_modified that we got before,
                 # or do we need to re-stat() the file?
+                logger.debug("Adding new file %r", fname)
                 add_document(cu, dbpath, last_modified, open(fname).read())
                 news += 1
 
