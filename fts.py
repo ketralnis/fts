@@ -4,8 +4,8 @@ import sys
 import os
 import stat
 
-from db import logger
-from db import finddb, prefix_expr
+from ftsdb import logger
+from ftsdb import finddb, prefix_expr
 
 def search(conn, prefix, term):
     # TODO: do a pass over the results to see if the files still exist and if

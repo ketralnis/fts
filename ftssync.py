@@ -4,7 +4,7 @@ import os
 import os.path
 import stat
 
-from db import update_document, add_document, finddb, prefix_expr, logger
+from ftsdb import update_document, add_document, finddb, prefix_expr, logger
 
 def sync(conn, path, prefix):
     # path must be a full path on disk

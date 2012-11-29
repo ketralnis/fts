@@ -3,7 +3,7 @@
 import os
 
 from ftssync import sync
-from db import createdb, logger
+from ftsdb import createdb, logger
 
 def main():
     cwd = os.getcwd()

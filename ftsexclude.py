@@ -4,7 +4,7 @@ from argparse import ArgumentParser
 import os
 import sys
 
-from db import finddb, logger
+from ftsdb import finddb, logger
 
 def main():
     ap = ArgumentParser(description="selectively ignore files for fts")
