@@ -118,6 +118,8 @@ def sync(conn, path, prefix):
 
             logger.info("%d new documents, %d deletes, %d updates", news, deletes, updates)
 
+            # TODO: vacuum? analyze?
+
         finally:
             c.close()
             cu.close()

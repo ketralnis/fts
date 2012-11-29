@@ -37,6 +37,10 @@ def createschema(c):
     c.execute("INSERT INTO exclusions(type, expression) VALUES('simple', ?)", (_db_name,))
     c.execute("INSERT INTO exclusions(type, expression) VALUES('re', '(^|.*/)\.git/.*')")
 
+    # TODO: there are some definite performance advantages to combining 'files'
+    # and 'files_fts', not least of which is that the search operation wouldn't
+    # require a join. Should look into this.
+
     # docid references the files_fts
     c.execute("""
         CREATE TABLE IF NOT EXISTS
