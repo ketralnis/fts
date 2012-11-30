@@ -74,13 +74,12 @@ def main():
     if args.init:
         didsomething = True
         init(cwd, initsync=not args.nosync)
-        return
 
     root, prefix, conn = finddb(cwd)
 
     with conn:
         # all other top-level functions operate in one global transaction
-        if args.sync:
+        if args.sync or (args.init and not args.nosync):
             didsomething = True
             sync(conn, root, prefix)
 

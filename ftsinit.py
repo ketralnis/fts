@@ -12,3 +12,5 @@ def init(cwd, initsync=True):
         with conn:
             # add the initial documents
             sync(conn, cwd, '')
+
+    return dbfname
