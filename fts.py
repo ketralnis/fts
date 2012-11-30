@@ -3,9 +3,14 @@
 import sys
 import os
 import stat
+from argparse import ArgumentParser
 
 from ftsdb import logger
 from ftsdb import finddb, prefix_expr
+
+from ftsinit import init
+from ftssync import sync
+from ftsexclude import add_ignore, list_ignores, rm_ignore
 
 def search(conn, prefix, term):
     with conn:
@@ -46,6 +51,68 @@ def search(conn, prefix, term):
             c.close()
 
 def main():
+    ap = ArgumentParser('fts', description="a command line full text search engine")
+
+    ap.add_argument("--init", action="store_true", help="Create a new .fts.db in the current directory")
+    ap.add_argument("--no-sync", dest='nosync', action="store_true", help="don't sync the database when making a new one. only valid with --init")
+
+    ap.add_argument("--sync", dest='sync', action="store_true", help="sync the fts database with the files on disk")
+    ap.add_argument("--optimize", action="store_true", help="optimize the sqlite database for size and performance")
+
+    ap.add_argument("--list-ignores", action='store_true')
+    ap.add_argument("--rm-ignore", type=int, metavar='ignoreid')
+    ap.add_argument("--ignore-re", metavar='re')
+    ap.add_argument("--ignore-simple", metavar='filename')
+    ap.add_argument("--ignore-glob", metavar='pattern')
+
+    ap.add_argument("searches", nargs="*")
+
+    args = ap.parse_args()
+
+    cwd = os.getcwd()
+
+    didsomething = False
+
+    if args.init:
+        didsomething = True
+        init(cwd, initsync=not args.nosync)
+        return
+
+    # all other options require an existing database
+    root, prefix, conn = finddb(cwd)
+
+    if args.sync:
+        didsomething = True
+        sync(conn, root, prefix)
+
+    if args.list_ignores:
+        didsomething = True
+        list_ignores(conn)
+
+    if args.rm_ignore:
+        didsomething = True
+        rm_ignore(conn, args.rm_ignore)
+
+    if args.ignore_re:
+        didsomething = True
+        add_ignore(conn, 're', args.ignore_re)
+    if args.ignore_simple:
+        didsomething = True
+        add_ignore(conn, 'simple', args.ignore_simple)
+    if args.ignore_glob:
+        didsomething = True
+        add_ignore(conn, 'glob', args.ignore_glob)
+
+    for term in args.searches:
+        # for now, ANY search matching a document will return it, and it may be
+        # returned twice
+        didsomething = True
+        search(conn, prefix, term)
+
+    if not didsomething:
+        ap.print_usage()
+        sys.exit(1)
+
     root, prefix, conn = finddb(os.getcwd())
     for fname in search(conn, prefix, sys.argv[1]):
         print fname
