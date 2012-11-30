@@ -27,11 +27,6 @@ join. Should look into this.
 
 do we need a metric for relevance or to sort the results?
 
-exclusions are processed after we walk the entire tree. Do we want to find a way
-to avoid walking entire components of the tree that are ignored?
-
-optional compression of text data
-
 --and and --or for multiple searches
 
 should version the schema
@@ -40,4 +35,7 @@ unicode safety
 
 on --init, a warning for shadowing a parent .fts.db
 
-directory exclusions for .git/hg/svn
+should a 'simple' exclusion ignore both directory components and filenames? or
+do we need separate types for that?
+
+should we cache compiled regexes?

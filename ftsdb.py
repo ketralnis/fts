@@ -2,6 +2,7 @@ import sqlite3
 import os.path
 import logging
 import zlib
+from functools import wraps
 
 try:
     import re2 as re
@@ -35,9 +36,9 @@ def createschema(c, compress=False):
     c.execute("INSERT INTO exclusions(type, expression) VALUES('glob', '*.pyc')")
     c.execute("INSERT INTO exclusions(type, expression) VALUES('glob', '*~')")
     c.execute("INSERT INTO exclusions(type, expression) VALUES('simple', ?)", (_db_name,))
-    c.execute("INSERT INTO exclusions(type, expression) VALUES('re', '(^|.*/)\.git/.*')")
-    c.execute("INSERT INTO exclusions(type, expression) VALUES('re', '(^|.*/)\.hg/.*')")
-    c.execute("INSERT INTO exclusions(type, expression) VALUES('re', '(^|.*/)\.svn/.*')")
+    c.execute("INSERT INTO exclusions(type, expression) VALUES('simple', '.svn')")
+    c.execute("INSERT INTO exclusions(type, expression) VALUES('simple', '.git')")
+    c.execute("INSERT INTO exclusions(type, expression) VALUES('simple', '.hg')")
 
     # docid references the files_fts
     c.execute("""
@@ -68,37 +69,44 @@ def getconfig(c, key, default=None):
     else:
         return default
 
+def log_errors(fn):
+    # sqlite swallows exceptions before reraising its own, so we'll add our own
+    # logging
+    @wraps(fn)
+    def wrapper(*a):
+        try:
+            return fn(*a)
+        except:
+            logger.exception("Execution failed in %s", fn.__name__)
+            raise
+    return wrapper
+
+@log_errors
 def compress(body):
-    try:
-        # should be safe to str() because we're relying on binary collation for now
-        if body is None:
-            body = ''
-        elif isinstance(body, unicode):
-            try:
-                body = body.encode('ascii')
-            except UnicodeEncodeError:
-                body = body.encode('utf-8')
-        return zlib.compress(body)
-    except:
-        logger.exception("compressing %s" % type(body))
-        raise
+    # should be safe to str() because we're relying on binary collation for now
+    if body is None:
+        body = ''
+    elif isinstance(body, unicode):
+        try:
+            body = body.encode('ascii')
+        except UnicodeEncodeError:
+            body = body.encode('utf-8')
+    return zlib.compress(body)
 
+@log_errors
 def uncompress(body):
-    try:
-        return zlib.decompress(body or '')
-    except:
-        logger.exception("decompressing %s" % type(body))
-        raise
+    return zlib.decompress(body or '')
 
+@log_errors
 def regexp(expr, item):
-    try:
-        item = item or ''
-        reg = re.compile(expr)
-        return reg.search(item) is not None
-    except:
-        # our exceptions are partially swallowed by sqlite, so log them ourself
-        logger.exception("Exception in regexp on %r", expr)
-        raise
+    item = item or ''
+    reg = re.compile(expr)
+    return reg.search(item) is not None
+
+@log_errors
+def ignore_simple(fullpath, pattern):
+    r = re.compile('(^|/)'+re.escape(pattern)+'(/|$)')
+    return r.search(fullpath) is not None
 
 def connect(fname):
     conn = sqlite3.connect(fname)
@@ -112,8 +120,7 @@ def connect(fname):
     conn.create_function("GZIP", 1, compress)
     conn.create_function("GUNZIP", 1, uncompress)
 
-    # install our regex engine
-    conn.create_function("BASENAME", 1, os.path.basename)
+    conn.create_function("IGNORE_SIMPLE", 2, ignore_simple)
 
     return conn
 
