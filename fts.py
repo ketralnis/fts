@@ -68,6 +68,7 @@ def main():
 
     cwd = os.getcwd()
     didsomething = False
+    exitval = 0
 
     if args.init:
         didsomething = True
@@ -77,14 +78,6 @@ def main():
 
     with conn:
         # all other top-level functions operate in one global transaction
-        if args.sync or (args.init and not args.nosync):
-            didsomething = True
-            sync(conn, root, prefix)
-
-        if args.list_ignores:
-            didsomething = True
-            list_ignores(conn)
-
         if args.rm_ignore:
             didsomething = True
             rm_ignore(conn, args.rm_ignore)
@@ -99,19 +92,30 @@ def main():
             didsomething = True
             add_ignore(conn, 'glob', args.ignore_glob)
 
+        if args.list_ignores:
+            didsomething = True
+            list_ignores(conn)
+
+        if args.sync or (args.init and not args.nosync):
+            didsomething = True
+            sync(conn, root, prefix)
+
         for term in args.searches:
             # for now, ANY search matching a document will return it, and it may be
             # returned twice
             didsomething = True
-            search(conn, prefix, term)
+
+            exitval = 1
+
+            for fname in search(conn, prefix, sys.argv[1]):
+                print fname
+                exitval = 0
 
     if not didsomething:
         ap.print_usage()
         sys.exit(1)
 
-    root, prefix, conn = finddb(os.getcwd())
-    for fname in search(conn, prefix, sys.argv[1]):
-        print fname
+    sys.exit(exitval)
 
 if __name__ == '__main__':
     main()
