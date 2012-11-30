@@ -21,6 +21,8 @@ def createschema(c, compress=False):
             value
         );
     """)
+    if compress:
+        c.execute("INSERT INTO config(key, value) VALUES('compressed', 'true')")
 
     c.execute("""
         CREATE TABLE IF NOT EXISTS
@@ -57,6 +59,14 @@ def createschema(c, compress=False):
                 body TEXT COLLATE BINARY NOT NULL
                 %(compress)s );
         """ % dict(compress=", compress=GZIP, uncompress=GUNZIP" if compress else ""))
+
+def getconfig(c, key, default=None):
+    c.execute("SELECT value FROM config WHERE key= ? ", (key,))
+    vals = list(c.fetchall())
+    if vals:
+        return vals[0][0]
+    else:
+        return default
 
 def compress(body):
     try:
