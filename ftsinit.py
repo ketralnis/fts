@@ -1,9 +1,16 @@
 #!/usr/bin/env python
 
+import os.path
+import sys
+
 from ftsdb import createdb
-from ftsdb import logger
+from ftsdb import logger, _db_name
 
 def init(cwd):
+    if os.path.isfile(os.path.join(cwd, _db_name)):
+        logger.error("Cowardly refusing to overwrite existing %s", _db_name)
+        sys.exit(1)
+
     dbfname, conn = createdb(cwd)
     logger.info("Created %s", dbfname)
     return dbfname

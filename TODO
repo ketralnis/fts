@@ -30,12 +30,7 @@ do we need a metric for relevance or to sort the results?
 exclusions are processed after we walk the entire tree. Do we want to find a way
 to avoid walking entire components of the tree that are ignored?
 
-regex search mode (with the understanding that it will be very slow, but maybe
-faster than a recursive grep)
-
 optional compression of text data
-
-init should check for an existing db and complain
 
 --and and --or for multiple searches
 
