@@ -9,18 +9,16 @@ def list_ignores(conn):
 def add_ignore(conn, typ, expression):
     assert typ in ('re', 'glob', 'simple')
 
-    with conn:
-        c = conn.cursor()
-        try:
-            c.execute("INSERT INTO exclusions(id, type, expression) VALUES(NULL, ?, ?)", (typ, expression))
-            return c.lastrowid
-        finally:
-            c.close()
+    c = conn.cursor()
+    try:
+        c.execute("INSERT INTO exclusions(id, type, expression) VALUES(NULL, ?, ?)", (typ, expression))
+        return c.lastrowid
+    finally:
+        c.close()
 
 def rm_ignore(conn, ignoreid):
-    with conn:
-        c = conn.cursor()
-        try:
-            c.execute("DELETE FROM exclusions WHERE id = ?", (ignoreid,))
-        finally:
-            c.close()
+    c = conn.cursor()
+    try:
+        c.execute("DELETE FROM exclusions WHERE id = ?", (ignoreid,))
+    finally:
+        c.close()

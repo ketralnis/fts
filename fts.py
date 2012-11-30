@@ -13,42 +13,41 @@ from ftssync import sync
 from ftsexclude import add_ignore, list_ignores, rm_ignore
 
 def search(conn, prefix, term):
-    with conn:
-        c = conn.cursor()
-        try:
-            prefix = prefix or ''
-            prefixexpr = prefix_expr(prefix)
-            needsync = 0
-            c.execute("""
-                SELECT f.path, f.last_modified
-                  FROM files f, files_fts ft
-                 WHERE f.docid = ft.docid
-                   AND (? = '' OR f.path LIKE ? ESCAPE '\\') -- use the prefix if present
-                   AND ft.body MATCH ?
-            """, (prefix, prefixexpr, term,))
-            for (path, last_modified) in c:
+    c = conn.cursor()
+    try:
+        prefix = prefix or ''
+        prefixexpr = prefix_expr(prefix)
+        needsync = 0
+        c.execute("""
+            SELECT f.path, f.last_modified
+              FROM files f, files_fts ft
+             WHERE f.docid = ft.docid
+               AND (? = '' OR f.path LIKE ? ESCAPE '\\') -- use the prefix if present
+               AND ft.body MATCH ?
+        """, (prefix, prefixexpr, term,))
+        for (path, last_modified) in c:
 
-                if prefix:
-                    assert path.startswith(prefix)
+            if prefix:
+                assert path.startswith(prefix)
 
-                shortpath = path[len(prefix)+1:] if prefix else path
-
+            shortpath = path[len(prefix)+1:] if prefix else path
 
 
-                try:
-                    st = os.stat(shortpath)
-                    if int(st[stat.ST_MTIME]) > last_modified:
-                        needsync += 1
-                except OSError:
+
+            try:
+                st = os.stat(shortpath)
+                if int(st[stat.ST_MTIME]) > last_modified:
                     needsync += 1
+            except OSError:
+                needsync += 1
 
-                yield shortpath
+            yield shortpath
 
-            if needsync:
-                logger.warning("%d files were missing or out-of-date, you may need to resync", needsync)
+        if needsync:
+            logger.warning("%d files were missing or out-of-date, you may need to resync", needsync)
 
-        finally:
-            c.close()
+    finally:
+        c.close()
 
 def main():
     ap = ArgumentParser('fts', description="a command line full text search engine")
@@ -70,7 +69,6 @@ def main():
     args = ap.parse_args()
 
     cwd = os.getcwd()
-
     didsomething = False
 
     if args.init:
@@ -78,36 +76,37 @@ def main():
         init(cwd, initsync=not args.nosync)
         return
 
-    # all other options require an existing database
     root, prefix, conn = finddb(cwd)
 
-    if args.sync:
-        didsomething = True
-        sync(conn, root, prefix)
+    with conn:
+        # all other top-level functions operate in one global transaction
+        if args.sync:
+            didsomething = True
+            sync(conn, root, prefix)
 
-    if args.list_ignores:
-        didsomething = True
-        list_ignores(conn)
+        if args.list_ignores:
+            didsomething = True
+            list_ignores(conn)
 
-    if args.rm_ignore:
-        didsomething = True
-        rm_ignore(conn, args.rm_ignore)
+        if args.rm_ignore:
+            didsomething = True
+            rm_ignore(conn, args.rm_ignore)
 
-    if args.ignore_re:
-        didsomething = True
-        add_ignore(conn, 're', args.ignore_re)
-    if args.ignore_simple:
-        didsomething = True
-        add_ignore(conn, 'simple', args.ignore_simple)
-    if args.ignore_glob:
-        didsomething = True
-        add_ignore(conn, 'glob', args.ignore_glob)
+        if args.ignore_re:
+            didsomething = True
+            add_ignore(conn, 're', args.ignore_re)
+        if args.ignore_simple:
+            didsomething = True
+            add_ignore(conn, 'simple', args.ignore_simple)
+        if args.ignore_glob:
+            didsomething = True
+            add_ignore(conn, 'glob', args.ignore_glob)
 
-    for term in args.searches:
-        # for now, ANY search matching a document will return it, and it may be
-        # returned twice
-        didsomething = True
-        search(conn, prefix, term)
+        for term in args.searches:
+            # for now, ANY search matching a document will return it, and it may be
+            # returned twice
+            didsomething = True
+            search(conn, prefix, term)
 
     if not didsomething:
         ap.print_usage()
