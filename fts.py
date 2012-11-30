@@ -83,6 +83,10 @@ def main():
     if args.init:
         didsomething = True
         init(cwd, compress=args.compress)
+    elif args.compress:
+        # we won't compress existing files
+        args.print_usage()
+        sys.exit(1)
 
     root, prefix, conn = finddb(cwd)
 

@@ -35,6 +35,7 @@ def createschema(c, compress=False):
     """)
     c.execute("INSERT INTO exclusions(type, expression) VALUES('glob', '*.pyc')")
     c.execute("INSERT INTO exclusions(type, expression) VALUES('glob', '*~')")
+    c.execute("INSERT INTO exclusions(type, expression) VALUES('glob', '*.o')")
     c.execute("INSERT INTO exclusions(type, expression) VALUES('simple', ?)", (_db_name,))
     c.execute("INSERT INTO exclusions(type, expression) VALUES('simple', '.svn')")
     c.execute("INSERT INTO exclusions(type, expression) VALUES('simple', '.git')")
@@ -77,16 +78,17 @@ def log_errors(fn):
         try:
             return fn(*a)
         except:
-            logger.exception("Execution failed in %s", fn.__name__)
+            logger.exception("Execution failed in %s%r", fn.__name__, a)
             raise
     return wrapper
 
 @log_errors
 def compress(body):
     # should be safe to str() because we're relying on binary collation for now
-    if body is None:
-        body = ''
-    elif isinstance(body, unicode):
+    if not body:
+        return ''
+
+    if isinstance(body, unicode):
         try:
             body = body.encode('ascii')
         except UnicodeEncodeError:
@@ -95,7 +97,9 @@ def compress(body):
 
 @log_errors
 def uncompress(body):
-    return zlib.decompress(body or '')
+    if not body:
+        return ''
+    return zlib.decompress(body)
 
 @log_errors
 def regexp(expr, item):
@@ -112,6 +116,9 @@ def connect(fname):
     conn = sqlite3.connect(fname)
     conn.text_factory=str
     conn.isolation_level = 'EXCLUSIVE'
+
+    # we only use LIKE for prefix matches on filenames. Some OSs have case-
+    # insensitive filesystems, but sorry guys
     conn.execute('PRAGMA case_sensitive_like=ON;')
 
     # install our regex engine
