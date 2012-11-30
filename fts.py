@@ -12,7 +12,8 @@ from ftsinit import init
 from ftssync import sync
 from ftsexclude import add_ignore, list_ignores, rm_ignore
 
-def search(conn, prefix, term):
+def search(conn, prefix, term, mode):
+    assert mode in ('MATCH', 'REGEXP')
     with Cursor(conn) as c:
         prefix = prefix or ''
         prefixexpr = prefix_expr(prefix)
@@ -22,8 +23,8 @@ def search(conn, prefix, term):
               FROM files f, files_fts ft
              WHERE f.docid = ft.docid
                AND (? = '' OR f.path LIKE ? ESCAPE '\\') -- use the prefix if present
-               AND ft.body MATCH ?
-        """, (prefix, prefixexpr, term,))
+               AND ft.body %(mode)s ?
+        """ % dict(mode=mode), (prefix, prefixexpr, term,))
         for (path, last_modified) in c:
 
             if prefix:
@@ -58,6 +59,10 @@ def main():
     ap.add_argument("--ignore-simple", metavar='filename')
     ap.add_argument("--ignore-glob", metavar='pattern')
     ap.add_argument("--ignore", dest='ignore_glob', metavar='pattern', help="alias for --ignore-glob")
+
+    ap.add_argument('--re', '--regex', '--regexp', dest='searchmode',
+                    default='MATCH', action="store_const", const='REGEXP',
+                    help="search using a regex instead of MATCH syntax. Much slower!")
 
     ap.add_argument("searches", nargs="*")
 
@@ -110,7 +115,7 @@ def main():
 
             exitval = 1
 
-            for fname in search(conn, prefix, term):
+            for fname in search(conn, prefix, term, args.searchmode):
                 print fname
                 exitval = 0
 
