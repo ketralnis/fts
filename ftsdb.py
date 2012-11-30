@@ -55,8 +55,14 @@ def createschema(c):
         """)
 
 def regexp(expr, item):
-    reg = re.compile(expr)
-    return reg.search(item) is not None
+    try:
+        item = item or ''
+        reg = re.compile(expr)
+        return reg.search(item) is not None
+    except:
+        # our exceptions are partially swallowed by sqlite, so log them ourself
+        logger.exception("Exception in regexp on %r", expr)
+        raise
 
 def connect(fname):
     conn = sqlite3.connect(fname)
