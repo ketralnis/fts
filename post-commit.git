@@ -1,0 +1,14 @@
+#!/bin/sh
+
+# add me to .git/hooks with +x for a commit hook that automatically updates the
+# fts database on various events. Applicable events include:
+# * post-commit
+# * post-merge
+# * post-checkout
+
+if $(which fts) > /dev/null; then
+  fts --sync
+else
+  echo "fts not on path" >&2
+fi
+
