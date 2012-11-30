@@ -105,12 +105,9 @@ def createdb(root):
     # 'root' must be an absolute path
     dbfname = os.path.join(root, _db_name)
     conn = connect(dbfname)
-    c = conn.cursor()
-    try:
+    with Cursor(conn) as c:
         createschema(c)
-        return dbfname, conn
-    finally:
-        c.close()
+    return dbfname, conn
 
 def prefix_expr(prefix):
     prefixexpr = prefix.replace('\\', '\\\\').replace('%', '\\%',).replace('_', '\\_') + '%'
@@ -133,3 +130,15 @@ def update_document(c, docid, last_modified, content):
                (last_modified, docid))
     c.execute("UPDATE files_fts SET body=? WHERE docid=?",
                (content, docid))
+
+class Cursor(object):
+    def __init__(self, conn):
+        self.conn = conn
+
+    def __enter__(self):
+        c = self.c = self.conn.cursor()
+        return c
+
+    def __exit__(self, type, value, traceback):
+        self.c.close()
+        del self.c

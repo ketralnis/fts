@@ -4,17 +4,15 @@ import os
 import os.path
 import stat
 
-from ftsdb import update_document, add_document, prefix_expr, logger
+from ftsdb import update_document, add_document, prefix_expr, logger, Cursor
 
 def sync(conn, path, prefix):
     # path must be a full path on disk
     # prefix must be the full path on disk that we're syncing (or empty)
 
       news = updates = deletes = 0
-      c = conn.cursor() # the cursor we use for reading
-      cu = conn.cursor() # the cursor we use for updating
 
-      try:
+      with Cursor(conn) as c, Cursor(conn) as cu:
           c.execute("""
                     CREATE TEMPORARY TABLE
                     ondisk (
@@ -116,7 +114,3 @@ def sync(conn, path, prefix):
               news += 1
 
           logger.info("%d new documents, %d deletes, %d updates, %d ignored", news, deletes, updates, ignores)
-
-      finally:
-          c.close()
-          cu.close()

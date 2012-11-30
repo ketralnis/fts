@@ -5,7 +5,7 @@ import os
 import stat
 from argparse import ArgumentParser
 
-from ftsdb import logger
+from ftsdb import logger, Cursor
 from ftsdb import finddb, prefix_expr
 
 from ftsinit import init
@@ -13,8 +13,7 @@ from ftssync import sync
 from ftsexclude import add_ignore, list_ignores, rm_ignore
 
 def search(conn, prefix, term):
-    c = conn.cursor()
-    try:
+    with Cursor(conn) as c:
         prefix = prefix or ''
         prefixexpr = prefix_expr(prefix)
         needsync = 0
@@ -43,9 +42,6 @@ def search(conn, prefix, term):
 
         if needsync:
             logger.warning("%d files were missing or out-of-date, you may need to resync", needsync)
-
-    finally:
-        c.close()
 
 def main():
     ap = ArgumentParser('fts', description="a command line full text search engine")
@@ -99,6 +95,12 @@ def main():
         if args.sync or (args.init and not args.nosync):
             didsomething = True
             sync(conn, root, prefix)
+
+        if args.optimize:
+            didsomething = True
+            with Cursor(conn) as c:
+                c.execute("INSERT INTO files_fts(files_fts) values('optimize');")
+                c.execute("VACUUM ANALYZE;")
 
         for term in args.searches:
             # for now, ANY search matching a document will return it, and it may be
