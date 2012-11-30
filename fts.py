@@ -49,6 +49,7 @@ def main():
 
     ap.add_argument("--init", action="store_true", help="Create a new .fts.db in the current directory")
     ap.add_argument("--no-sync", dest='nosync', action="store_true", help="don't sync the database when making a new one. only valid with --init")
+    ap.add_argument("--compress", action="store_true", help="compress file-contents in the database. only valid with --init")
 
     ap.add_argument("--sync", dest='sync', action="store_true", help="sync the fts database with the files on disk")
     ap.add_argument("--optimize", action="store_true", help="optimize the sqlite database for size and performance")
@@ -74,7 +75,7 @@ def main():
 
     if args.init:
         didsomething = True
-        init(cwd)
+        init(cwd, compress=args.compress)
 
     root, prefix, conn = finddb(cwd)
 

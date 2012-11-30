@@ -1,6 +1,7 @@
 import sqlite3
 import os.path
 import logging
+import zlib
 
 try:
     import re2 as re
@@ -12,8 +13,7 @@ _db_name = '.fts.db'
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger("fts")
 
-
-def createschema(c):
+def createschema(c, compress=False):
     c.execute("""
         CREATE TABLE IF NOT EXISTS
         config (
@@ -51,8 +51,31 @@ def createschema(c):
         c.execute("""
             CREATE VIRTUAL TABLE
             files_fts USING fts4 (
-                body TEXT COLLATE BINARY);
-        """)
+                body TEXT COLLATE BINARY
+                %(compress)s );
+        """ % dict(compress=", compress=GZIP, uncompress=GUNZIP" if compress else ""))
+
+def compress(body):
+    try:
+        # should be safe to str() because we're relying on binary collation for now
+        if body is None:
+            body = ''
+        elif isinstance(body, unicode):
+            try:
+                body = body.encode('ascii')
+            except UnicodeEncodeError:
+                body = body.encode('utf-8')
+        return zlib.compress(body)
+    except:
+        logger.exception("compressing %s" % type(body))
+        raise
+
+def uncompress(body):
+    try:
+        return zlib.decompress(body)
+    except:
+        logger.exception("decompressing %s" % type(body))
+        raise
 
 def regexp(expr, item):
     try:
@@ -72,6 +95,9 @@ def connect(fname):
 
     # install our regex engine
     conn.create_function("REGEXP", 2, regexp)
+
+    conn.create_function("GZIP", 1, compress)
+    conn.create_function("GUNZIP", 1, uncompress)
 
     # install our regex engine
     conn.create_function("BASENAME", 1, os.path.basename)
@@ -101,18 +127,19 @@ def finddb(initroot, root = None):
     if root == '/':
         raise NoDB()
 
+    # splitting by hand means that we don't have to respect symlinks
     components = os.path.split(root)
     parentcomponents = components[:-1]
     parent = os.path.join(*parentcomponents)
 
     return finddb(initroot, parent)
 
-def createdb(root):
+def createdb(root, compress=False):
     # 'root' must be an absolute path
     dbfname = os.path.join(root, _db_name)
     conn = connect(dbfname)
     with Cursor(conn) as c:
-        createschema(c)
+        createschema(c, compress=compress)
     return dbfname, conn
 
 def prefix_expr(prefix):

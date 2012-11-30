@@ -35,3 +35,7 @@ optional compression of text data
 --and and --or for multiple searches
 
 should version the schema
+
+unicode safety
+
+on --init, a warning for shadowing a parent .fts.db
