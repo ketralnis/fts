@@ -1,7 +1,5 @@
 do the setup.py thing so that fts can be installed in /usr/local/bin
 
---logging options
-
 tool/option to add/sync specific files
 
 After adding exclusions, we tell them that they need to resync. But we should

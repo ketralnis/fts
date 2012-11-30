@@ -3,6 +3,7 @@
 import sys
 import os
 import stat
+import logging
 from argparse import ArgumentParser
 
 from ftsdb import logger, Cursor
@@ -47,6 +48,8 @@ def search(conn, prefix, term, mode):
 def main():
     ap = ArgumentParser('fts', description="a command line full text search engine")
 
+    ap.add_argument('--logging', default='warn', help="which logging level to uses (error/warn/info/debug). For debugging")
+
     ap.add_argument("--init", action="store_true", help="Create a new .fts.db in the current directory")
     ap.add_argument("--no-sync", dest='nosync', action="store_true", help="don't sync the database when making a new one. only valid with --init")
     ap.add_argument("--compress", action="store_true", help="compress file-contents in the database. only valid with --init. disables --regexp queries")
@@ -68,6 +71,10 @@ def main():
     ap.add_argument("searches", nargs="*")
 
     args = ap.parse_args()
+
+    logging_level = args.logging.upper()
+    assert logging_level in ('ERROR', 'WARN', 'INFO', 'DEBUG')
+    logger.setLevel(getattr(logging, logging_level))
 
     cwd = os.getcwd()
     didsomething = False
