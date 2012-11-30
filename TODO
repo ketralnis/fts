@@ -41,3 +41,5 @@ unicode safety
 on --init, a warning for shadowing a parent .fts.db
 
 directory exclusions for .git/hg/svn
+
+compression breaks re searches atm. fix or error out
