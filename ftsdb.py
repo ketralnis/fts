@@ -31,8 +31,11 @@ def createschema(c, compress=False):
         );
     """)
     c.execute("INSERT INTO exclusions(type, expression) VALUES('glob', '*.pyc')")
+    c.execute("INSERT INTO exclusions(type, expression) VALUES('glob', '*~')")
     c.execute("INSERT INTO exclusions(type, expression) VALUES('simple', ?)", (_db_name,))
     c.execute("INSERT INTO exclusions(type, expression) VALUES('re', '(^|.*/)\.git/.*')")
+    c.execute("INSERT INTO exclusions(type, expression) VALUES('re', '(^|.*/)\.hg/.*')")
+    c.execute("INSERT INTO exclusions(type, expression) VALUES('re', '(^|.*/)\.svn/.*')")
 
     # docid references the files_fts
     c.execute("""
@@ -51,7 +54,7 @@ def createschema(c, compress=False):
         c.execute("""
             CREATE VIRTUAL TABLE
             files_fts USING fts4 (
-                body TEXT COLLATE BINARY
+                body TEXT COLLATE BINARY NOT NULL
                 %(compress)s );
         """ % dict(compress=", compress=GZIP, uncompress=GUNZIP" if compress else ""))
 
@@ -72,7 +75,7 @@ def compress(body):
 
 def uncompress(body):
     try:
-        return zlib.decompress(body)
+        return zlib.decompress(body or '')
     except:
         logger.exception("decompressing %s" % type(body))
         raise

@@ -39,3 +39,5 @@ should version the schema
 unicode safety
 
 on --init, a warning for shadowing a parent .fts.db
+
+directory exclusions for .git/hg/svn
