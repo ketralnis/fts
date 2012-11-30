@@ -1,0 +1,66 @@
+a command-line full-text search engine
+
+Quickstart
+-----
+
+add it to your $PATH and run like
+
+    $ fts --init # creates .fts.db in the current directory and index everything underneath it
+    $ fts bacon  # find "bacon" in files in the current directory
+
+Searching
+---------
+
+Syntax is sqlite's fts4 query language (http://www.sqlite.org/fts3.html)
+
+    $ fts 'sqlite AND database'
+
+Also supported are regex queries. The regex engine is python's re module
+(http://docs.python.org/2/library/re.html)
+
+    $ fts --re 'create (virtual)? table'
+
+Other commands
+--------------
+
+    # sync the database state with the disk state (must be done when files are changed)
+    $ fts --sync
+
+    # ignore various types of files (you'll want to --sync afterwards)
+    $ fts --ignore-re '\.git/objects/[A-Za-z0-9]$'
+    $ fts --ignore-glob '*.pyc'
+    $ fts --ignore-simple '.svn'
+    $ fts --ignore-simple 'corefile'
+    $ fts --list-ignores
+    $ fts --rm-ignore 1 # stop ignoring this type
+
+    # optimize the database after lots of writes have occurred
+    $ fts --optimize
+
+See also `fts --help`
+
+Most commands can be combined. To --init a new database and search it
+immediately:
+
+    $ fts --init --ignore-glob='*.pyc' 'what to wear?'
+
+Or to ignore object files and immediately remove them from the database and
+defragment it:
+
+    $ fts --ignore-glob '*.o' --sync --optimize
+
+Compression
+-----------
+
+You can --init with --compress. This will make your .fts.db smaller but disables
+--regex queries.
+
+Some quick compression numbers on a largish source code directory (69,431
+indexed files):
+
+    Compressed  DB size  build time  query time sync time query with regex
+    yes         233mb    77.80s      0.097s      9.809s   n/a
+    no          911mb    51.48s      0.275s     11.207s   5.694s
+
+Compression cannot be enabled or disabled after DB creation, so to change it
+you'll have to reindex
