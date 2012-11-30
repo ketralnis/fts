@@ -4,8 +4,6 @@ do the setup.py thing so that fts can be installed in /usr/local/bin
 
 tool/option to add/sync specific files
 
-vacuum/analyse/optimize options
-
 After adding exclusions, we tell them that they need to resync. But we should
 also automatically remove DB items that they've just now excluded (so that they
 only have to resync on *removing* an exclusion)

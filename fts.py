@@ -57,6 +57,7 @@ def main():
     ap.add_argument("--ignore-re", metavar='re')
     ap.add_argument("--ignore-simple", metavar='filename')
     ap.add_argument("--ignore-glob", metavar='pattern')
+    ap.add_argument("--ignore", dest='ignore_glob', metavar='pattern', help="alias for --ignore-glob")
 
     ap.add_argument("searches", nargs="*")
 
@@ -109,7 +110,7 @@ def main():
 
             exitval = 1
 
-            for fname in search(conn, prefix, sys.argv[1]):
+            for fname in search(conn, prefix, term):
                 print fname
                 exitval = 0
 
