@@ -108,12 +108,13 @@ def main():
                 c.execute("INSERT INTO files_fts(files_fts) values('optimize');")
                 c.execute("VACUUM ANALYZE;")
 
+        if args.searches:
+            exitval = 2
+
         for term in args.searches:
             # for now, ANY search matching a document will return it, and it may be
             # returned twice
             didsomething = True
-
-            exitval = 1
 
             for fname in search(conn, prefix, term, args.searchmode):
                 print fname
