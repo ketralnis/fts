@@ -60,8 +60,8 @@ def sync(conn, path, prefix):
                 WHERE (e.type = 'glob'   AND od.path GLOB   e.expression)
                    OR (e.type = 're'     AND od.path REGEXP e.expression)
                    OR (e.type = 'simple' AND BASENAME(od.path) = e.expression)
-           )""")
-          logger.debug("Ignored %d files", cu.rowcount)
+          )""")
+          ignores = cu.rowcount
 
           # now build three groups: new files to be added, missing files to be
           # deleted, and old files to be updated
@@ -115,7 +115,7 @@ def sync(conn, path, prefix):
               add_document(cu, dbpath, last_modified, open(fname).read())
               news += 1
 
-          logger.info("%d new documents, %d deletes, %d updates", news, deletes, updates)
+          logger.info("%d new documents, %d deletes, %d updates, %d ignored", news, deletes, updates, ignores)
 
       finally:
           c.close()

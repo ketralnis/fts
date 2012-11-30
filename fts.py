@@ -32,8 +32,6 @@ def search(conn, prefix, term):
 
             shortpath = path[len(prefix)+1:] if prefix else path
 
-
-
             try:
                 st = os.stat(shortpath)
                 if int(st[stat.ST_MTIME]) > last_modified:
@@ -73,7 +71,7 @@ def main():
 
     if args.init:
         didsomething = True
-        init(cwd, initsync=not args.nosync)
+        init(cwd)
 
     root, prefix, conn = finddb(cwd)
 
