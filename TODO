@@ -34,6 +34,4 @@ optional compression of text data
 
 --and and --or for multiple searches
 
-rmignore should check that the ignoreid actually exists
-
 should version the schema

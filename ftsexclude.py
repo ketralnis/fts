@@ -15,4 +15,6 @@ def add_ignore(conn, typ, expression):
 
 def rm_ignore(conn, ignoreid):
     with Cursor(conn) as c:
+        if not c.execute("SELECT id FROM exclusions WHERE id = ?", (ignoreid,)).fetchall():
+            raise Exception("ignoreid %d not found" % (ignoreid,))
         c.execute("DELETE FROM exclusions WHERE id = ?", (ignoreid,))
