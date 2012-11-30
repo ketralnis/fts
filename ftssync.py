@@ -1,12 +1,15 @@
 import os
 import os.path
 import stat
+import time
 
 from ftsdb import update_document, add_document, prefix_expr, logger, Cursor
 
 def sync(conn, path, prefix):
     # path must be a full path on disk
     # prefix must be the full path on disk that we're syncing (or empty)
+
+    start = time.time()
 
     news = updates = deletes = 0
 
@@ -120,4 +123,4 @@ def sync(conn, path, prefix):
             add_document(cu, dbpath, last_modified, open(fname).read())
             news += 1
 
-        logger.info("%d new documents, %d deletes, %d updates, %d ignored", news, deletes, updates, ignores)
+        logger.info("%d new documents, %d deletes, %d updates, %d ignored in %.2fs", news, deletes, updates, ignores, time.time()-start)
