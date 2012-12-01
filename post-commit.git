@@ -6,7 +6,7 @@
 # * post-merge
 # * post-checkout
 
-if $(which fts) > /dev/null; then
+if ! which fts > /dev/null; then
   fts --sync
 else
   echo "fts not on path" >&2
