@@ -35,3 +35,5 @@ on --init, a warning for shadowing a parent .fts.db
 
 should a 'simple' exclusion ignore both directory components and filenames? or
 do we need separate types for that?
+
+should searching check the exclusions DB?
