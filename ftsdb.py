@@ -170,7 +170,7 @@ def createdb(root, compress=False):
     return dbfname, conn
 
 def prefix_expr(prefix):
-    prefixexpr = prefix.replace('\\', '\\\\').replace('%', '\\%',).replace('_', '\\_') + '%'
+    prefixexpr = prefix.replace('\\', '\\\\').replace('%', '\\%',).replace('_', '\\_') + '/%'
     return prefixexpr
 
 def add_document(c, fname, last_modified, content):
