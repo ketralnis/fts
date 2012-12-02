@@ -35,7 +35,7 @@ pushd rando > /dev/null
     fts --sync
     search=$(cat $(ls | unsort | head -n 1) | unsort | head -n 1)
     echo search from in rando "($search)"
-    fts "$search" | tee $tmpf
+    fts -l "$search" | tee $tmpf
 
     ignorefile=$(cat $tmpf | head -n 1)
 

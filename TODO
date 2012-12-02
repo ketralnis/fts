@@ -4,13 +4,15 @@ tool/option to add/sync specific files
 
 After adding exclusions, we tell them that they need to resync. But we should
 also automatically remove DB items that they've just now excluded (so that they
-only have to resync on *removing* an exclusion)
+only have to resync on *removing* an exclusion). Or maybe searching should check
+the exclusions DB?
 
 After a search we tell the user if the files are out of date or missing, but we
 don't tell them if there are new files in the directory that we haven't indexed.
 Should we check for that?
 
-On a search, get matchinfo and optionally display/highlight matches
+work needs to be done on the output format/colouring. also more options for the
+format (see ack-grep for a good example of both)
 
 cmdline switches to display the full path instead of the relative path on a
 search
@@ -36,4 +38,5 @@ on --init, a warning for shadowing a parent .fts.db
 should a 'simple' exclusion ignore both directory components and filenames? or
 do we need separate types for that?
 
-should searching check the exclusions DB?
+-i option for case-insensitive regex matches (MATCH matches are always
+case-insensitive)

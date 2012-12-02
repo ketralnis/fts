@@ -4,6 +4,8 @@ import sys
 import os
 import stat
 import logging
+import itertools
+from collections import namedtuple
 from argparse import ArgumentParser
 
 from ftsdb import logger, Cursor
@@ -13,34 +15,85 @@ from ftsinit import init
 from ftssync import sync
 from ftsexclude import add_ignore, list_ignores, rm_ignore
 
-def search(conn, prefix, term, mode):
+snippet_color        = '\x1b[01;33m'
+snippet_end_color    = '\x1b[00m'
+snippet_elipsis      = ''.join([snippet_color, '...', snippet_end_color])
+
+filename_color       = '\x1b[01;31m'
+filename_end_color   = '\x1b[00m'
+
+def grouper(n, iterable, fillvalue=None):
+    "Collect data into fixed-length chunks or blocks"
+    # from http://docs.python.org/2/library/itertools.html#recipes
+    # grouper(3, 'ABCDEFG', 'x') --> ABC DEF Gxx
+    args = [iter(iterable)] * n
+    return itertools.izip_longest(fillvalue=fillvalue, *args)
+
+SearchOffset = namedtuple('SearchOffset', ('offset', 'length'))
+
+class SearchResult(object):
+    __slots__ = ('filename', 'offsets', 'snippet')
+
+    def __init__(self, filename, offsets, snippet):
+        self.filename = filename
+        self.offsets = self.parse_offsets(offsets)
+        self.snippet = snippet
+
+    def parse_offsets(self, offsets):
+        ret = []
+
+        nums = map(int, offsets.split())
+        assert len(nums) % 4 == 0
+        for colno, termno, offset, length in grouper(4, nums):
+            ret.append(SearchOffset(offset, length))
+
+        return ret
+
+    def __repr__(self):
+        return "%s(%r, %r, %r)" % (self.__class__.__name__,
+                                   self.filename,
+                                   self.offsets,
+                                   self.snippet)
+
+    def __str__(self):
+        return filename_color + self.filename + filename_end_color + ':\n' + '\n'.join('\t' + x for x in self.snippet.split('\n'))
+
+
+def search(conn, prefix, term, mode, checksync = True):
     assert mode in ('MATCH', 'REGEXP')
     with Cursor(conn) as c:
         prefix = prefix or ''
         prefixexpr = prefix_expr(prefix)
         needsync = 0
         c.execute("""
-            SELECT f.path, f.last_modified
+            SELECT f.path, f.last_modified,
+                   offsets(ft.files_fts),
+                   snippet(ft.files_fts, ?, ?, ?)
               FROM files f, files_fts ft
              WHERE f.docid = ft.docid
                AND (? = '' OR f.path LIKE ? ESCAPE '\\') -- use the prefix if present
                AND ft.body %(mode)s ?
-        """ % dict(mode=mode), (prefix, prefixexpr, term,))
-        for (path, last_modified) in c:
+        """ % dict(mode=mode), (snippet_color, snippet_end_color, snippet_elipsis, prefix, prefixexpr, term,))
+        for (path, last_modified, offsets, snippet) in c:
 
             if prefix:
                 assert path.startswith(prefix)
 
+            # if they're in a subdirectory, deprefix the filename
             shortpath = path[len(prefix)+1:] if prefix else path
 
-            try:
-                st = os.stat(shortpath)
-                if int(st[stat.ST_MTIME]) > last_modified:
+            if checksync:
+                # check if the returned files are known to be out of date. this
+                # can be skipped when checksync is False (which means that a
+                # sync was done before starting the search)
+                try:
+                    st = os.stat(shortpath)
+                    if int(st[stat.ST_MTIME]) > last_modified:
+                        needsync += 1
+                except OSError:
                     needsync += 1
-            except OSError:
-                needsync += 1
 
-            yield shortpath
+            yield SearchResult(shortpath, offsets, snippet)
 
         if needsync:
             logger.warning("%d files were missing or out-of-date, you may need to resync", needsync)
@@ -67,6 +120,8 @@ def main():
     ap.add_argument('--re', '--regex', '--regexp', dest='searchmode',
                     default='MATCH', action="store_const", const='REGEXP',
                     help="search using a regex instead of MATCH syntax. Much slower!")
+
+    ap.add_argument('-l', dest='display_mode', action='store_const', const='filename_only', help="print only the matching filenames")
 
     ap.add_argument("searches", nargs="*")
 
@@ -110,7 +165,9 @@ def main():
             didsomething = True
             list_ignores(conn)
 
-        if args.sync or (args.init and not args.nosync):
+        dosync = args.sync or (args.init and not args.nosync)
+
+        if dosync:
             didsomething = True
             sync(conn, root, prefix)
 
@@ -131,8 +188,14 @@ def main():
             # returned twice
             didsomething = True
 
-            for fname in search(conn, prefix, term, args.searchmode):
-                print fname
+            for sr in search(conn, prefix, term, args.searchmode,
+                             checksync=dosync):
+                if args.display_mode == 'filename_only':
+                    print sr.filename
+                else:
+                    print sr
+
+                # at least one result was returned
                 exitval = 0
 
     if not didsomething:

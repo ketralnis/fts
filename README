@@ -1,12 +1,16 @@
 a command-line full-text search engine
 
 Quickstart
------
+----------
 
 add it to your $PATH and run like
 
     $ fts --init # creates .fts.db in the current directory and index everything underneath it
     $ fts bacon  # find "bacon" in files in the current directory
+
+Whenever files have changed:
+
+    $ fts --sync
 
 Searching
 ---------
@@ -18,7 +22,11 @@ Syntax is sqlite's fts4 query language (http://www.sqlite.org/fts3.html)
 Also supported are regex queries. The regex engine is python's re module
 (http://docs.python.org/2/library/re.html)
 
-    $ fts --re 'create (virtual)? table'
+    $ fts --re 'create( virtual)? table'
+
+If you use regex searching, consider installing `re2`
+(http://code.google.com/p/re2/ + http://pypi.python.org/pypi/re2/), as fts will
+use it if present
 
 Other commands
 --------------
@@ -64,3 +72,11 @@ indexed files):
 
 Compression cannot be enabled or disabled after DB creation, so to change it
 you'll have to reindex
+
+Exit codes
+----------
+
+0: there were no errors. if a search was run, at least one result was found
+1: there was an error
+2: a search was run and no results were found
+Other: an unhandled internal error occurred
