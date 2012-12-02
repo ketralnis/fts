@@ -2,6 +2,7 @@ import sqlite3
 import os.path
 import logging
 import zlib
+import struct
 from functools import wraps
 
 try:
@@ -112,6 +113,23 @@ def ignore_simple(fullpath, pattern):
     r = re.compile('(^|/)'+re.escape(pattern)+'(/|$)')
     return r.search(fullpath) is not None
 
+def make_rank_func(weights):
+    """
+    Taken from http://chipaca.com/post/16877190061/doing-full-text-search-in-sqlite-from-python
+    """
+    @log_errors
+    def rank(matchinfo):
+        # matchinfo is defined as returning 32-bit unsigned integers
+        # in machine byte order
+        # http://www.sqlite.org/fts3.html#matchinfo
+        # and struct defaults to machine byte order
+        matchinfo = struct.unpack("I"*(len(matchinfo)/4), matchinfo)
+        it = iter(matchinfo[2:])
+        return sum(x[0]*w/x[1]
+                   for x, w in zip(zip(it, it, it), weights)
+                   if x[1])
+    return rank
+
 def connect(fname):
     conn = sqlite3.connect(fname)
     conn.text_factory=str
@@ -129,6 +147,8 @@ def connect(fname):
 
     conn.create_function("IGNORE_SIMPLE", 2, ignore_simple)
 
+    conn.create_function("simple_rank", 1, make_rank_func((1.0,)))
+
     return conn
 
 class NoDB(Exception):
@@ -136,7 +156,6 @@ class NoDB(Exception):
 
 def finddb(initroot, root = None):
     # 'root' must be an absolute path
-
     if root is None:
         root = initroot
 
@@ -151,14 +170,14 @@ def finddb(initroot, root = None):
         prefix = initroot[len(root)+1:]
         return root, prefix, conn
 
-    if root == '/':
+    if root in ('/', ''):
         raise NoDB()
 
-    # splitting by hand means that we don't have to respect symlinks
+    # splitting by hand means that we don't have to respect symlinks or deal
+    # with circular links
     components = os.path.split(root)
-    parentcomponents = components[:-1]
-    parent = os.path.join(*parentcomponents)
-
+    parents, wd = components[:-1], components[-1]
+    parent = os.path.join(*parents)
     return finddb(initroot, parent)
 
 def createdb(root, compress=False):

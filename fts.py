@@ -68,11 +68,14 @@ def search(conn, prefix, term, mode, checksync = True):
         c.execute("""
             SELECT f.path, f.last_modified,
                    offsets(ft.files_fts),
-                   snippet(ft.files_fts, ?, ?, ?)
+                   snippet(ft.files_fts, ?, ?, ?, -1, -10)
               FROM files f, files_fts ft
              WHERE f.docid = ft.docid
                AND (? = '' OR f.path LIKE ? ESCAPE '\\') -- use the prefix if present
                AND ft.body %(mode)s ?
+          -- TODO: this runs simple_rank, which calls a Python function, many
+          -- times per row. we can decompose this to a subselect to avoid this
+          ORDER BY simple_rank(matchinfo(ft.files_fts))
         """ % dict(mode=mode), (snippet_color, snippet_end_color, snippet_elipsis, prefix, prefixexpr, term,))
         for (path, last_modified, offsets, snippet) in c:
 
