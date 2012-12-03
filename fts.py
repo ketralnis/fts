@@ -6,7 +6,7 @@ import stat
 import logging
 import itertools
 from collections import namedtuple
-from argparse import ArgumentParser
+import argparse
 
 from ftsdb import logger, Cursor
 from ftsdb import finddb, prefix_expr, getconfig
@@ -102,9 +102,10 @@ def search(conn, prefix, term, mode, checksync = True):
             logger.warning("%d files were missing or out-of-date, you may need to resync", needsync)
 
 def main():
-    ap = ArgumentParser('fts', description="a command line full text search engine")
+    ap = argparse.ArgumentParser('fts', description="a command line full text search engine")
 
-    ap.add_argument('--logging', default='warn', help="which logging level to uses (error/warn/info/debug). For debugging")
+    ap.add_argument('--logging', default='warn', help=argparse.SUPPRESS,
+                    choices = ('error', 'warn', 'info', 'debug'))
 
     ap.add_argument("--init", action="store_true", help="Create a new .fts.db in the current directory")
     ap.add_argument("--no-sync", dest='nosync', action="store_true", help="don't sync the database when making a new one. only valid with --init")
@@ -126,13 +127,11 @@ def main():
 
     ap.add_argument('-l', dest='display_mode', action='store_const', const='filename_only', help="print only the matching filenames")
 
-    ap.add_argument("searches", nargs="*")
+    ap.add_argument("search", nargs="*")
 
     args = ap.parse_args()
 
-    logging_level = args.logging.upper()
-    assert logging_level in ('ERROR', 'WARN', 'INFO', 'DEBUG')
-    logger.setLevel(getattr(logging, logging_level))
+    logger.setLevel(getattr(logging, args.logging.upper()))
 
     cwd = os.getcwd()
     didsomething = False
@@ -180,13 +179,13 @@ def main():
                 c.execute("INSERT INTO files_fts(files_fts) values('optimize');")
                 c.execute("VACUUM ANALYZE;")
 
-        if args.searches:
+        if args.search:
             exitval = 2
             with Cursor(conn) as c:
                 if args.searchmode == 'REGEXP' and getconfig(c, 'compressed'):
                     raise Exception("Can't do regexp matches against compressed database")
 
-        for term in args.searches:
+        for term in args.search:
             # for now, ANY search matching a document will return it, and it may be
             # returned twice
             didsomething = True
