@@ -114,6 +114,8 @@ def main():
     ap.add_argument("--sync", dest='sync', action="store_true", help="sync the fts database with the files on disk")
     ap.add_argument("--optimize", action="store_true", help="optimize the sqlite database for size and performance")
 
+    ap.add_argument('--sync-one', help="sync a single file (unlike the other commands, this one doesn't care about the current directory)")
+
     ap.add_argument("--list-ignores", action='store_true')
     ap.add_argument("--rm-ignore", type=int, metavar='ignoreid')
     ap.add_argument("--ignore-re", metavar='re')
@@ -141,9 +143,34 @@ def main():
         didsomething = True
         init(cwd, compress=args.compress)
     elif args.compress:
-        # we won't compress existing files
+        # we can't compress existing databases
         args.print_usage()
         sys.exit(1)
+
+    if args.sync_one:
+        # this is designed to be called by tools like procmail or IDEs' on-save
+        # hooks, so rather than making them play games with the cwd we have
+        # special finddb logic for it. note that because of this we are
+        # vulnerable to .fts.db files that shadow the intended one. Also note
+        # that we may operate on a different .fts.db than other commands run in
+        # the same session.
+        # TODO: Maybe we should refuse to allow other commands to operate in the
+        # same session for this reason
+        fpath = args.sync_one
+        if not fpath.startswith('/'):
+            fpath = os.path.join(cwd, fpath)
+        assert os.path.isfile(fpath)
+        dirname, basename = os.path.dirname(fpath), os.path.basename(fpath)
+
+        froot, fprefix, conn = finddb(dirname)
+
+        assert fpath.startswith(os.path.join(froot, fprefix))
+
+        with conn:
+            sync(conn, froot, fprefix, files = [basename])
+
+        didsomething = True
+
 
     root, prefix, conn = finddb(cwd)
 

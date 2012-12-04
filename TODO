@@ -12,7 +12,9 @@ don't tell them if there are new files in the directory that we haven't indexed.
 Should we check for that?
 
 work needs to be done on the output format/colouring. also more options for the
-format (see ack-grep for a good example of both)
+format (see ack-grep for a good example of both).
+
+re searching has broken output format atm
 
 cmdline switches to display the full path instead of the relative path on a
 search
@@ -38,3 +40,5 @@ do we need separate types for that?
 
 -i option for case-insensitive regex matches (MATCH matches are always
 case-insensitive)
+
+half of our features are broken by compression. should just rip this out

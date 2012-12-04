@@ -2,10 +2,37 @@ import os
 import os.path
 import stat
 import time
+from functools import partial
 
 from ftsdb import update_document, add_document, prefix_expr, logger, Cursor
 
-def sync(conn, path, prefix):
+def visitor(path, prefix, simple_exclusions, cu, dirname, fnames):
+    if simple_exclusions:
+        simple_removes = set(fnames).intersection(simple_exclusions)
+        for sr in simple_removes:
+            fnames.remove(sr)
+
+    for sname in fnames:
+        fname = os.path.join(dirname, sname)
+
+        assert fname.startswith(path)
+        if prefix:
+            assert fname.startswith(os.path.join(path, prefix))
+
+        dbfname = fname[len(path)+1:]
+
+        st = os.stat(fname)
+        mode = st.st_mode
+        if stat.S_ISDIR(mode):
+            continue
+        if not stat.S_ISREG(mode):
+            logger.warn("Skipping non-regular file %s (%s)", dbfname, stat.S_IFMT(mode))
+            continue
+
+        cu.execute("INSERT INTO ondisk(path, dbpath, last_modified) VALUES (?, ?, ?)",
+                   (fname, dbfname, int(st[stat.ST_MTIME])))
+
+def sync(conn, path, prefix, files = None):
     # path must be a full path on disk
     # prefix must be the full path on disk that we're syncing (or empty)
 
@@ -26,38 +53,14 @@ def sync(conn, path, prefix):
         c.execute("SELECT expression FROM exclusions WHERE type = 'simple'")
         simple_exclusions = set(x[0] for x in c.fetchall())
 
-        def visitor(arg, dirname, fnames):
-            assert arg is None
-
-            if simple_exclusions:
-                simple_removes = set(fnames).intersection(simple_exclusions)
-                for sr in simple_removes:
-                    fnames.remove(sr)
-
-            for sname in fnames:
-                fname = os.path.join(dirname, sname)
-
-                assert fname.startswith(path)
-                if prefix:
-                    assert fname.startswith(os.path.join(path, prefix))
-
-                dbfname = fname[len(path)+1:]
-
-                st = os.stat(fname)
-                mode = st.st_mode
-                if stat.S_ISDIR(mode):
-                    continue
-                if not stat.S_ISREG(mode):
-                    logger.warn("Skipping non-regular file %s (%s)", dbfname, stat.S_IFMT(mode))
-                    continue
-
-                cu.execute("INSERT INTO ondisk(path, dbpath, last_modified) VALUES (?, ?, ?)",
-                           (fname, dbfname, int(st[stat.ST_MTIME])))
-
         wpath = path
         if prefix:
             wpath = os.path.join(path, prefix)
-        os.path.walk(wpath, visitor, None)
+
+        if files is None:
+            os.path.walk(wpath, partial(visitor, path, prefix, simple_exclusions), cu)
+        else:
+            visitor(path, prefix, simple_exclusions, cu, wpath, files)
 
         # remove anyone that matches our ignore globs
         cu.execute("""
@@ -86,29 +89,30 @@ def sync(conn, path, prefix):
             update_document(cu, docid, last_modified, open(path).read())
             updates += 1
 
-        # ones to delete
-        c.execute("""
-                  CREATE TEMPORARY TABLE deletedocs (
-                      docid integer primary KEY
-                  );
-        """)
-        c.execute("""
-                  INSERT INTO deletedocs(docid)
-                  SELECT f.docid
-                    FROM files f
-                   WHERE (? = '' OR f.path LIKE ? ESCAPE '\\')
-                     AND f.path NOT IN (SELECT dbpath FROM ondisk od)
-        """, (prefix, prefix_expr(prefix),))
-        c.execute("""
-            DELETE FROM files WHERE docid IN (SELECT docid FROM deletedocs);
-        """)
-        c.execute("""
-            DELETE FROM files_fts WHERE docid IN (SELECT docid FROM deletedocs);
-        """)
-        deletes = c.execute("SELECT COUNT(*) FROM deletedocs").fetchone()[0]
-        c.execute("""
-            DROP TABLE deletedocs;
-        """)
+        if files is None:
+            # ones to delete
+            c.execute("""
+                      CREATE TEMPORARY TABLE deletedocs (
+                          docid integer primary KEY
+                      );
+            """)
+            c.execute("""
+                      INSERT INTO deletedocs(docid)
+                      SELECT f.docid
+                        FROM files f
+                       WHERE (? = '' OR f.path LIKE ? ESCAPE '\\')
+                         AND f.path NOT IN (SELECT dbpath FROM ondisk od)
+            """, (prefix, prefix_expr(prefix),))
+            c.execute("""
+                DELETE FROM files WHERE docid IN (SELECT docid FROM deletedocs);
+            """)
+            c.execute("""
+                DELETE FROM files_fts WHERE docid IN (SELECT docid FROM deletedocs);
+            """)
+            deletes = c.execute("SELECT COUNT(*) FROM deletedocs").fetchone()[0]
+            c.execute("""
+                DROP TABLE deletedocs;
+            """)
 
         # new files to create
         c.execute("""
