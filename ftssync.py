@@ -1,5 +1,6 @@
 import os
 import os.path
+import errno
 import stat
 import time
 from functools import partial
@@ -86,7 +87,14 @@ def sync(conn, path, prefix, files = None):
         """)
         for (docid, path, last_modified) in c:
             logger.debug("Updating %r", path)
-            update_document(cu, docid, last_modified, open(path).read())
+            try:
+                update_document(cu, docid, last_modified, open(path).read())
+            except IOError as e:
+                if e.errno in (errno.ENOENT, errno.EPERM):
+                    logging.warning("Skipping %s: %s", path, os.strerror(e.errno))
+                else:
+                    raise
+                continue
             updates += 1
 
         if files is None:
@@ -124,7 +132,14 @@ def sync(conn, path, prefix, files = None):
             # is it safe to re-use the last_modified that we got before, or
             # do we need to re-stat() the file?
             logger.debug("Adding new file %r", fname)
-            add_document(cu, dbpath, last_modified, open(fname).read())
+            try:
+                add_document(cu, dbpath, last_modified, open(fname).read())
+            except IOError as e:
+                if e.errno in (errno.ENOENT, errno.EPERM):
+                    logging.warning("Skipping %s: %s", fname, os.strerror(e.errno))
+                else:
+                    raise
+                continue
             news += 1
 
         logger.info("%d new documents, %d deletes, %d updates, %d ignored in %.2fs", news, deletes, updates, ignores, time.time()-start)
