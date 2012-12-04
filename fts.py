@@ -127,16 +127,15 @@ def main():
     ap.add_argument("--sync", dest='sync', action="store_true", help="sync the fts database with the files on disk")
     ap.add_argument("--optimize", action="store_true", help="optimize the sqlite database for size and performance")
 
-    ap.add_argument('--sync-one', help="sync a single file (unlike the other commands, this one doesn't care about the current directory)")
+    ap.add_argument('--sync-one', metavar='filename', help="sync a single file (unlike the other commands, this one doesn't care about the current directory)")
 
     ap.add_argument("--list-ignores", action='store_true')
     ap.add_argument("--rm-ignore", type=int, metavar='ignoreid')
     ap.add_argument("--ignore-re", metavar='re')
     ap.add_argument("--ignore-simple", metavar='filename')
-    ap.add_argument("--ignore-glob", metavar='pattern')
-    ap.add_argument("--ignore", dest='ignore_glob', metavar='pattern', help="alias for --ignore-glob")
+    ap.add_argument('--ignore', "--ignore-glob", dest='ignore_glob', metavar='pattern')
 
-    ap.add_argument('--re', '--regex', '--regexp', dest='searchmode',
+    ap.add_argument('-r', '--re', '--regex', '--regexp', dest='searchmode',
                     default='MATCH', action="store_const", const='REGEXP',
                     help="search using a regex instead of MATCH syntax. Much slower!")
 
