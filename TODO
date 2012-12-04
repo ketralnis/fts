@@ -40,3 +40,5 @@ do we need separate types for that?
 
 -i option for case-insensitive regex matches (MATCH matches are always
 case-insensitive)
+
+need custom parsers/tokenisers for common indexed formats like base64-encoded mail
