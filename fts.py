@@ -55,12 +55,21 @@ class SearchResult(object):
                                    self.offsets,
                                    self.snippet)
 
-    def __str__(self):
-        return filename_color + self.filename + filename_end_color + ':\n' + '\n'.join('\t' + x for x in self.snippet.split('\n'))
+    def colorize(self, s, color=True):
+        if color:
+            return ''.join((filename_color, s, filename_end_color))
+        else:
+            return s
 
+    def format(self, color=False):
+        if self.snippet:
+                return self.colorize(self.filename, color) + ':\n' + '\n'.join('\t' + x for x in self.snippet.split('\n'))
+        else:
+            return self.colorize(self.filename, color)
 
-def search(conn, prefix, term, mode, checksync = True):
+def search(conn, prefix, term, mode, checksync = True, color=False):
     assert mode in ('MATCH', 'REGEXP')
+
     with Cursor(conn) as c:
         prefix = prefix or ''
         prefixexpr = prefix_expr(prefix)
@@ -76,7 +85,12 @@ def search(conn, prefix, term, mode, checksync = True):
           -- TODO: this runs simple_rank, which calls a Python function, many
           -- times per row. we can decompose this to a subselect to avoid this
           ORDER BY simple_rank(matchinfo(ft.files_fts))
-        """ % dict(mode=mode), (snippet_color, snippet_end_color, snippet_elipsis, prefix, prefixexpr, term,))
+        """ % dict(mode=mode), (snippet_color if color else '',
+                                snippet_end_color if color else '',
+                                snippet_elipsis if color else '...',
+                                prefix,
+                                prefixexpr,
+                                term,))
         for (path, last_modified, offsets, snippet) in c:
 
             if prefix:
@@ -128,12 +142,25 @@ def main():
                     help="search using a regex instead of MATCH syntax. Much slower!")
 
     ap.add_argument('-l', dest='display_mode', action='store_const', const='filename_only', help="print only the matching filenames")
+    ap.add_argument('--color-mode', dest='color_mode', choices=('yes', 'no', 'auto'), default='auto')
+    ap.add_argument('--color', dest='color_mode', action='store_const', const='yes')
 
     ap.add_argument("search", nargs="*")
 
     args = ap.parse_args()
 
     logger.setLevel(getattr(logging, args.logging.upper()))
+
+    if args.color_mode == 'yes':
+        color = True
+    elif args.color_mode == 'no':
+        color = False
+    else:
+        # it's 'auto'
+        color = (os.isatty(sys.stdout.fileno())
+                 and args.display_mode != 'filename_only'
+                 and args.searchmode != 'REGEXP' # since we don't have snippets working here yet
+                 )
 
     cwd = os.getcwd()
     didsomething = False
@@ -218,11 +245,11 @@ def main():
             didsomething = True
 
             for sr in search(conn, prefix, term, args.searchmode,
-                             checksync=dosync):
+                             checksync=dosync, color=color):
                 if args.display_mode == 'filename_only':
                     print sr.filename
                 else:
-                    print sr
+                    print sr.format(color=color)
 
                 # at least one result was returned
                 exitval = 0
