@@ -1,7 +1,6 @@
 import sqlite3
 import os.path
 import logging
-import zlib
 import struct
 from functools import wraps
 
@@ -15,7 +14,7 @@ _db_name = '.fts.db'
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger("fts")
 
-def createschema(c, compress=False):
+def createschema(c):
     c.execute("""
         CREATE TABLE IF NOT EXISTS
         config (
@@ -23,8 +22,6 @@ def createschema(c, compress=False):
             value
         );
     """)
-    if compress:
-        c.execute("INSERT INTO config(key, value) VALUES('compressed', 'true')")
 
     c.execute("""
         CREATE TABLE IF NOT EXISTS
@@ -60,8 +57,8 @@ def createschema(c, compress=False):
             CREATE VIRTUAL TABLE
             files_fts USING fts4 (
                 body TEXT COLLATE BINARY NOT NULL
-                %(compress)s );
-        """ % dict(compress=", compress=GZIP, uncompress=GUNZIP" if compress else ""))
+            );
+        """)
 
 def getconfig(c, key, default=None):
     c.execute("SELECT value FROM config WHERE key= ? ", (key,))
@@ -70,6 +67,17 @@ def getconfig(c, key, default=None):
         return vals[0][0]
     else:
         return default
+
+def setconfig(c, key, value):
+    unset = []
+    oldval = getconfig(c, key, unset)
+
+    if oldval is unset:
+        c.execute("INSERT INTO config(key, value) VALUES(?, ?)", (key, value))
+        return None
+
+    c.execute("UPDATE config SET value = ? WHERE key = ?", (value, key))
+    return oldval
 
 def log_errors(fn):
     # sqlite swallows exceptions before reraising its own, so we'll add our own
@@ -82,25 +90,6 @@ def log_errors(fn):
             logger.exception("Execution failed in %s%r", fn.__name__, a)
             raise
     return wrapper
-
-@log_errors
-def compress(body):
-    # should be safe to str() because we're relying on binary collation for now
-    if not body:
-        return ''
-
-    if isinstance(body, unicode):
-        try:
-            body = body.encode('ascii')
-        except UnicodeEncodeError:
-            body = body.encode('utf-8')
-    return zlib.compress(body)
-
-@log_errors
-def uncompress(body):
-    if not body:
-        return ''
-    return zlib.decompress(body)
 
 @log_errors
 def regexp(expr, item):
@@ -142,9 +131,6 @@ def connect(fname):
     # install our regex engine
     conn.create_function("REGEXP", 2, regexp)
 
-    conn.create_function("GZIP", 1, compress)
-    conn.create_function("GUNZIP", 1, uncompress)
-
     conn.create_function("IGNORE_SIMPLE", 2, ignore_simple)
 
     conn.create_function("simple_rank", 1, make_rank_func((1.0,)))
@@ -180,12 +166,12 @@ def finddb(initroot, root = None):
     parent = os.path.join(*parents)
     return finddb(initroot, parent)
 
-def createdb(root, compress=False):
+def createdb(root):
     # 'root' must be an absolute path
     dbfname = os.path.join(root, _db_name)
     conn = connect(dbfname)
     with Cursor(conn) as c:
-        createschema(c, compress=compress)
+        createschema(c)
     return dbfname, conn
 
 def prefix_expr(prefix):

@@ -57,22 +57,6 @@ defragment it:
 
     $ fts --ignore-glob '*.o' --sync --optimize
 
-Compression
------------
-
-You can --init with --compress. This will make your .fts.db smaller but disables
---regex queries.
-
-Some quick compression numbers on a largish source code directory (69,431
-indexed files):
-
-    Compressed  DB size  build time  query time sync time query with regex
-    yes         233mb    77.80s      0.097s      9.809s   n/a
-    no          911mb    51.48s      0.275s     11.207s   5.694s
-
-Compression cannot be enabled or disabled after DB creation, so to change it
-you'll have to reindex
-
 Exit codes
 ----------
 

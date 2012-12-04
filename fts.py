@@ -123,7 +123,6 @@ def main():
 
     ap.add_argument("--init", action="store_true", help="Create a new .fts.db in the current directory")
     ap.add_argument("--no-sync", dest='nosync', action="store_true", help="don't sync the database when making a new one. only valid with --init")
-    ap.add_argument("--compress", action="store_true", help="compress file-contents in the database. only valid with --init. disables --regexp queries")
 
     ap.add_argument("--sync", dest='sync', action="store_true", help="sync the fts database with the files on disk")
     ap.add_argument("--optimize", action="store_true", help="optimize the sqlite database for size and performance")
@@ -168,11 +167,7 @@ def main():
 
     if args.init:
         didsomething = True
-        init(cwd, compress=args.compress)
-    elif args.compress:
-        # we can't compress existing databases
-        args.print_usage()
-        sys.exit(1)
+        init(cwd)
 
     if args.sync_one:
         # this is designed to be called by tools like procmail or IDEs' on-save
@@ -232,12 +227,6 @@ def main():
             with Cursor(conn) as c:
                 c.execute("INSERT INTO files_fts(files_fts) values('optimize');")
                 c.execute("VACUUM ANALYZE;")
-
-        if args.search:
-            exitval = 2
-            with Cursor(conn) as c:
-                if args.searchmode == 'REGEXP' and getconfig(c, 'compressed'):
-                    raise Exception("Can't do regexp matches against compressed database")
 
         for term in args.search:
             # for now, ANY search matching a document will return it, and it may be
