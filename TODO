@@ -1,7 +1,5 @@
 do the setup.py thing so that fts can be installed in /usr/local/bin
 
-tool/option to add/sync specific files
-
 After adding exclusions, we tell them that they need to resync. But we should
 also automatically remove DB items that they've just now excluded (so that they
 only have to resync on *removing* an exclusion). Or maybe searching should check
@@ -11,10 +9,12 @@ After a search we tell the user if the files are out of date or missing, but we
 don't tell them if there are new files in the directory that we haven't indexed.
 Should we check for that?
 
+should we respect .ftsignore and ~/.ftsignore files? Maybe it only comes up in
+dev, but I find that recreating these entries all of the time sucks and there
+are some global ones like *.o and *.pyc that I'd like to be rid of for forever
+
 work needs to be done on the output format/colouring. also more options for the
 format (see ack-grep for a good example of both).
-
-re searching has broken output format atm
 
 cmdline switches to display the full path instead of the relative path on a
 search
