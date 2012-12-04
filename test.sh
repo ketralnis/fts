@@ -48,5 +48,19 @@ pushd rando > /dev/null
         exit 1
     fi
 
+    somefile=$(ls|unsort|head -n 1)
+    here=$(pwd)
+    echo "thefile" >> $somefile
+    thefile="$here/$somefile"
+    pushd / > /dev/null
+        echo sync $thefile from /
+        if ! fts --logging=debug --sync-one "$thefile" 2>&1 | grep -- "$somefile"; then
+            # run again to get the error
+            fts --logging=debug --sync-one "$thefile"
+            echo "Unable to --sync-one $thefile from /"
+            exit 1
+        fi
+    popd > /dev/null
+
 popd > /dev/null
 
