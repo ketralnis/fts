@@ -44,6 +44,9 @@ def visitor(path, prefix, simple_exclusions, cu, dirname, fnames):
         cu.execute("INSERT INTO ondisk(path, dbpath, last_modified) VALUES (?, ?, ?)",
                    (fname, dbfname, int(st[stat.ST_MTIME])))
 
+def tcount(c, tname):
+    return c.execute("SELECT COUNT(*) FROM %s;" % tname).fetchone()[0]
+
 def sync(conn, path, prefix, files = None):
     # path must be a full path on disk
     # prefix must be the full path on disk that we're syncing (or empty)
@@ -74,17 +77,20 @@ def sync(conn, path, prefix, files = None):
         else:
             visitor(path, prefix, simple_exclusions, cu, wpath, files)
 
-        # remove anyone that matches our ignore globs
+        if logger.getEffectiveLevel() <= logging.DEBUG:
+            logger.debug("Found %d files, now processing ignores", tcount(cu, "ondisk"))
+
         cu.execute("""
             DELETE FROM ondisk WHERE path in
             (SELECT od.path
                FROM ondisk od, exclusions e
-              WHERE (e.type = 'glob'   AND od.path GLOB   e.expression)
-                 OR (e.type = 're'     AND od.path REGEXP e.expression)
+              WHERE (e.type = 'glob'   AND GLOB(e.expression, od.path))
+                 OR (e.type = 're'     AND REGEXP(e.expression, od.path))
                  OR (e.type = 'simple' AND IGNORE_SIMPLE(od.path, e.expression)
             )
         )""")
         ignores = cu.rowcount
+        logger.debug("Ignored %d files", ignores)
 
         # now build three groups: new files to be added, missing files to be
         # deleted, and old files to be updated
@@ -99,6 +105,8 @@ def sync(conn, path, prefix, files = None):
              WHERE od.dbpath = f.path
                AND f.last_modified < od.last_modified
         """)
+        if logger.getEffectiveLevel() <= logging.DEBUG:
+            logger.debug("Prepared %d files for updating", tcount(cu, "updated_files"))
 
         # new files to create
         cu.execute("""
@@ -109,6 +117,8 @@ def sync(conn, path, prefix, files = None):
               FROM ondisk od
              WHERE od.dbpath NOT IN (SELECT path FROM files)
         """)
+        if logger.getEffectiveLevel() <= logging.DEBUG:
+            logger.debug("Prepared %d files for creation", tcount(cu, "created_files"))
 
         # files that we've indexed in the past but don't exist anymore
         cu.execute("""
@@ -118,25 +128,28 @@ def sync(conn, path, prefix, files = None):
              WHERE (? = '' OR f.path LIKE ? ESCAPE '\\')
                AND f.path NOT IN (SELECT dbpath FROM ondisk od);
         """, (prefix, prefix_expr(prefix),))
+        if logger.getEffectiveLevel() <= logging.DEBUG:
+            logger.debug("Prepared %d files for deletion", tcount(cu, "deletedocs"))
 
         # set up our debugging progress-printing closure
         def printprogress(*a):
             pass
-        if logger.getEffectiveLevel() <= logging.DEBUG:
-            progresstotal = (cu.execute("SELECT COUNT(*) FROM updated_files").fetchone()[0] +
-                             cu.execute("SELECT COUNT(*) FROM created_files").fetchone()[0])
+        if logger.getEffectiveLevel() <= logging.INFO:
+            progresstotal = tcount(cu, "updated_files") + tcount(cu, "created_files")
             if progresstotal > 0:
                 def printprogress(s, updates, news, fname):
-                    logger.debug("%d/%d (%.1f%%) %s: %s", updates+news, progresstotal, float(updates+news)/progresstotal*100, s, fname)
+                    total = updates+news
+                    percent = float(updates+news)/progresstotal*100
+                    logger.info("%d/%d (%.1f%%) %s: %s", total, progresstotal, percent, s, fname)
 
         c.execute("SELECT docid, path, last_modified FROM updated_files;")
-        for (docid, path, last_modified) in c:
-            printprogress("Updating", updates, news, path)
+        for (docid, fname, last_modified) in c:
+            printprogress("Updating", updates, news, fname)
             try:
-                update_document(cu, docid, last_modified, open(path).read())
+                update_document(cu, docid, last_modified, open(fname).read())
             except IOError as e:
                 if e.errno in (errno.ENOENT, errno.EPERM):
-                    logger.warning("Skipping %s: %s", path, os.strerror(e.errno))
+                    logger.warning("Skipping %s: %s", fname, os.strerror(e.errno))
                 else:
                     raise
                 continue
@@ -145,13 +158,9 @@ def sync(conn, path, prefix, files = None):
         if files is None:
             # don't delete non-matching files if we've been given a specific
             # list of files to update
-            c.execute("""
-                DELETE FROM files WHERE docid IN (SELECT docid FROM deletedocs);
-            """)
+            c.execute("DELETE FROM files WHERE docid IN (SELECT docid FROM deletedocs);")
             del1 = c.rowcount
-            c.execute("""
-                DELETE FROM files_fts WHERE docid IN (SELECT docid FROM deletedocs);
-            """)
+            c.execute("DELETE FROM files_fts WHERE docid IN (SELECT docid FROM deletedocs);")
             del2 = c.rowcount
             deletes = max(del1, del2)
 
