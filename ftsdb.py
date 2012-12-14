@@ -3,6 +3,7 @@ import os.path
 import logging
 import struct
 from functools import wraps
+import fnmatch
 
 try:
     import re2 as re
@@ -94,13 +95,12 @@ def log_errors(fn):
 @log_errors
 def regexp(expr, item):
     item = item or ''
-    reg = re.compile(expr)
-    return reg.search(item) is not None
+    return re.search(expr, item) is not None
 
 @log_errors
 def ignore_simple(fullpath, pattern):
-    r = re.compile('(^|/)'+re.escape(pattern)+'(/|$)')
-    return r.search(fullpath) is not None
+    r = '(^|/)'+re.escape(pattern)+'(/|$)'
+    return re.search(r, fullpath) is not None
 
 def make_rank_func(weights):
     """
