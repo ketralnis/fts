@@ -1,44 +1,67 @@
-do the setup.py thing so that fts can be installed in /usr/local/bin
+do the setup.py thing so that fts can be installed in /usr/local/bin. also make
+'fts' a shell script that falls fts.py instead of a symlink to it
 
 After adding exclusions, we tell them that they need to resync. But we should
 also automatically remove DB items that they've just now excluded (so that they
-only have to resync on *removing* an exclusion). Or maybe searching should check
-the exclusions DB?
+only have to resync on *removing* an exclusion). Or maybe searching should
+double check the exclusions DB?
 
 After a search we tell the user if the files are out of date or missing, but we
 don't tell them if there are new files in the directory that we haven't indexed.
-Should we check for that?
+Should we check for that? It means walking the filesystem on every search which
+our whole program exists to avoid
 
 should we respect .ftsignore and ~/.ftsignore files? Maybe it only comes up in
 dev, but I find that recreating these entries all of the time sucks and there
 are some global ones like *.o and *.pyc that I'd like to be rid of for forever
 
-work needs to be done on the output format/colouring. also more options for the
-format (see ack-grep for a good example of both).
+work needs to be done on the output format/colouring like including line
+numbers. also more options for the output format (see ack-grep for a good
+example of both).
 
 cmdline switches to display the full path instead of the relative path on a
 search
 
 a python test suite instead of this silly shell script
 
-track file hashes so that we can avoid reindexing renamed files?
+track file hashes so that we can avoid reindexing renamed or duplicate files?
 
 there are some definite performance advantages to combining 'files' and
 'files_fts', not least of which is that the search operation wouldn't require a
 join. Should look into this.
 
---and and --or for multiple searches
+--and and or for multiple searches (right now, multiple searches are allowed but
+we print every result for every match, and can print the same file twice)
 
 should version the schema
 
-unicode safety
+unicode safety (we just naively turn everything to utf8 right now)
 
 on --init, a warning for shadowing a parent .fts.db
 
-should a 'simple' exclusion ignore both directory components and filenames? or
-do we need separate types for that?
+should a 'simple' exclusion ignore both directory components and filenames like
+it does now? or do we need separate types for that?
 
 -i option for case-insensitive regex matches (MATCH matches are always
 case-insensitive)
 
 need custom parsers/tokenisers for common indexed formats like base64-encoded mail
+
+ability to add multiple exclusions in a single command line invocation. This is
+important because otherwise it's impossible to avoid really expensive --inits
+when you know you're going to delete most of the results
+
+ability to only include certain directories in the search with cwding to them
+
+a partially created .fts.db breaks stuff. if --init fails or is ^C'd we should
+delete the file. n.b. that for a ^C after the init but during the sync, any
+specified --ignores (or other commands) will be in the failed implied sync's
+transaction and so will also fail. because of this we may want to delete the DB
+if we fail in the --sync implied by an --init as well
+
+I have a few million of emails that I index. I ignore --ignore=re a big set of
+monthly folders named like "alerts-2011-01jan" that are cron messages that I
+don't care about. But we still walk them and we still os.stat every single
+message. Because they're ignored, we then immediately delete them from the
+ondisk temporary table before reading out of any of their contents. There really
+needs to be a fix for this use-case
