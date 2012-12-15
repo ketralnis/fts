@@ -14,28 +14,25 @@ except ImportError:
 
 from ftsdb import update_document, add_document, prefix_expr, logger, Cursor
 
-def should_allow(exclusions, path):
+def should_allow(exclusions, basename, dbpath):
     """
     returns whether a given file should be allowed to exist based on our
     exclusion list
     """
     # exclusions =:= [{type, pattern}]
-    # path =:= full path to file
 
     for typ, pattern in exclusions:
         if typ == 'simple':
-            bname = os.path.basename(path)
-            if bname == pattern:
+            if basename == pattern:
                 return False
 
         elif typ == 'glob':
-            bname = os.path.basename(path)
             # on basename only?
-            if fnmatch.fnmatch(bname, pattern):
+            if fnmatch.fnmatch(basename, pattern):
                 return False
 
         elif typ == 're':
-            if re.search(pattern, path):
+            if re.search(pattern, dbpath):
                 # match or search? basename or full path or dbpath?
                 return False
 
@@ -48,8 +45,8 @@ def visitor(path, prefix, exclusions, cu, dirname, fnames):
 
     remove = []
 
-    for sname in fnames:
-        fname = os.path.join(dirname, sname)
+    for basename in fnames:
+        fname = os.path.join(dirname, basename)
 
         assert fname.startswith(path)
         if prefix:
@@ -57,8 +54,8 @@ def visitor(path, prefix, exclusions, cu, dirname, fnames):
 
         dbfname = fname[len(path)+1:]
 
-        if not should_allow(exclusions, dbfname):
-            remove.append(sname)
+        if not should_allow(exclusions, basename, dbfname):
+            remove.append(basename)
             continue
 
         try:
