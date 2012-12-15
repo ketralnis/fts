@@ -54,7 +54,7 @@ def visitor(path, prefix, exclusions, cu, dirname, fnames):
 
         dbfname = fname[len(path)+1:]
 
-        if not should_allow(exclusions, basename, dbfname):
+        if exclusions and not should_allow(exclusions, basename, dbfname):
             remove.append(basename)
             continue
 
