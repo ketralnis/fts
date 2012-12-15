@@ -39,8 +39,8 @@ unicode safety (we just naively turn everything to utf8 right now)
 
 on --init, a warning for shadowing a parent .fts.db
 
-should a 'simple' exclusion ignore both directory components and filenames like
-it does now? or do we need separate types for that?
+should an exclusion ignore both directory components and filenames like it does
+now? or do we need separate types for that?
 
 -i option for case-insensitive regex matches (MATCH matches are always
 case-insensitive)

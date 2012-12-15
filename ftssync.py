@@ -5,18 +5,48 @@ import stat
 import time
 from functools import partial
 import logging
+import fnmatch
+
+try:
+    import re2 as re
+except ImportError:
+    import re
 
 from ftsdb import update_document, add_document, prefix_expr, logger, Cursor
 
-def visitor(path, prefix, simple_exclusions, cu, dirname, fnames):
-    if simple_exclusions:
-        simple_removes = set(fnames).intersection(simple_exclusions)
-        for sr in simple_removes:
-            fnames.remove(sr)
+def should_allow(exclusions, path):
+    """
+    returns whether a given file should be allowed to exist based on our
+    exclusion list
+    """
+    # exclusions =:= [{type, pattern}]
+    # path =:= full path to file
 
+    for typ, pattern in exclusions:
+        if typ == 'simple':
+            bname = os.path.basename(path)
+            if bname == pattern:
+                return False
+
+        elif typ == 'glob':
+            bname = os.path.basename(path)
+            # on basename only?
+            if fnmatch.fnmatch(bname, pattern):
+                return False
+
+        elif typ == 're':
+            if re.search(pattern, path):
+                # match or search? basename or full path or dbpath?
+                return False
+
+    return True
+
+def visitor(path, prefix, exclusions, cu, dirname, fnames):
     if logger.getEffectiveLevel() <= logging.DEBUG:
         logger.debug("Walking %s", dirname)
         fnames.sort() # makes the child 'walking' messages come out in an order the user expects
+
+    remove = []
 
     for sname in fnames:
         fname = os.path.join(dirname, sname)
@@ -26,6 +56,10 @@ def visitor(path, prefix, simple_exclusions, cu, dirname, fnames):
             assert fname.startswith(os.path.join(path, prefix))
 
         dbfname = fname[len(path)+1:]
+
+        if not should_allow(exclusions, dbfname):
+            remove.append(sname)
+            continue
 
         try:
             st = os.stat(fname)
@@ -43,6 +77,9 @@ def visitor(path, prefix, simple_exclusions, cu, dirname, fnames):
 
         cu.execute("INSERT INTO ondisk(path, dbpath, last_modified) VALUES (?, ?, ?)",
                    (fname, dbfname, int(st[stat.ST_MTIME])))
+
+    for r in remove:
+        fnames.remove(r)
 
 def tcount(c, tname):
     return c.execute("SELECT COUNT(*) FROM %s;" % tname).fetchone()[0]
@@ -65,32 +102,22 @@ def sync(conn, path, prefix, files = None):
                   );
                   """)
 
-        c.execute("SELECT expression FROM exclusions WHERE type = 'simple'")
-        simple_exclusions = set(x[0] for x in c.fetchall())
+        exclusions = []
+        c.execute("SELECT type AS typ, expression AS e FROM exclusions;")
+        for typ, expression in c.fetchall():
+            exclusions.append((typ, expression))
 
         wpath = path
         if prefix:
             wpath = os.path.join(path, prefix)
 
         if files is None:
-            os.path.walk(wpath, partial(visitor, path, prefix, simple_exclusions), cu)
+            os.path.walk(wpath, partial(visitor, path, prefix, exclusions), cu)
         else:
-            visitor(path, prefix, simple_exclusions, cu, wpath, files)
+            visitor(path, prefix, exclusions, cu, wpath, files)
 
         if logger.getEffectiveLevel() <= logging.DEBUG:
-            logger.debug("Found %d files, now processing ignores", tcount(cu, "ondisk"))
-
-        cu.execute("""
-            DELETE FROM ondisk WHERE path in
-            (SELECT od.path
-               FROM ondisk od, exclusions e
-              WHERE (e.type = 'glob'   AND GLOB(e.expression, od.path))
-                 OR (e.type = 're'     AND REGEXP(e.expression, od.path))
-                 OR (e.type = 'simple' AND IGNORE_SIMPLE(od.path, e.expression)
-            )
-        )""")
-        ignores = cu.rowcount
-        logger.debug("Ignored %d files", ignores)
+            logger.debug("Found %d files", tcount(cu, "ondisk"))
 
         # now build three groups: new files to be added, missing files to be
         # deleted, and old files to be updated
@@ -181,7 +208,7 @@ def sync(conn, path, prefix, files = None):
                 continue
             news += 1
 
-        logger.info("%d new documents, %d deletes, %d updates, %d ignored in %.2fs", news, deletes, updates, ignores, time.time()-start)
+        logger.info("%d new documents, %d deletes, %d updates in %.2fs", news, deletes, updates, time.time()-start)
 
         cu.execute("DROP TABLE updated_files;")
         cu.execute("DROP TABLE created_files;")

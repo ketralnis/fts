@@ -3,7 +3,6 @@ import os.path
 import logging
 import struct
 from functools import wraps
-import fnmatch
 
 try:
     import re2 as re
@@ -97,11 +96,6 @@ def regexp(expr, item):
     item = item or ''
     return re.search(expr, item) is not None
 
-@log_errors
-def ignore_simple(fullpath, pattern):
-    r = '(^|/)'+re.escape(pattern)+'(/|$)'
-    return re.search(r, fullpath) is not None
-
 def make_rank_func(weights):
     """
     Taken from http://chipaca.com/post/16877190061/doing-full-text-search-in-sqlite-from-python
@@ -130,8 +124,6 @@ def connect(fname):
 
     # install our regex engine
     conn.create_function("REGEXP", 2, regexp)
-
-    conn.create_function("IGNORE_SIMPLE", 2, ignore_simple)
 
     conn.create_function("simple_rank", 1, make_rank_func((1.0,)))
 
