@@ -32,7 +32,7 @@ def should_allow(exclusions, basename, dbpath):
                 return False
 
         elif typ == 're':
-            if re.search(pattern, dbpath):
+            if pattern.search(dbpath):
                 # match or search? basename or full path or dbpath?
                 return False
 
@@ -75,6 +75,8 @@ def visitor(path, prefix, exclusions, cu, dirname, fnames):
         cu.execute("INSERT INTO ondisk(path, dbpath, last_modified) VALUES (?, ?, ?)",
                    (fname, dbfname, int(st[stat.ST_MTIME])))
 
+    if remove and logger.getEffectiveLevel() <= logging.DEBUG:
+        logger.debug("Removing %r from walk", list(remove))
     for r in remove:
         fnames.remove(r)
 
@@ -102,6 +104,8 @@ def sync(conn, path, prefix, files = None):
         exclusions = []
         c.execute("SELECT type AS typ, expression AS e FROM exclusions;")
         for typ, expression in c.fetchall():
+            if typ == 're':
+                expression = re.compile(expression)
             exclusions.append((typ, expression))
 
         wpath = path
