@@ -45,13 +45,11 @@ now? or do we need separate types for that?
 -i option for case-insensitive regex matches (MATCH matches are always
 case-insensitive)
 
-need custom parsers/tokenisers for common indexed formats like base64-encoded mail
+need custom parsers/tokenisers for common indexed formats like base64-encoded
+mail
 
-ability to add multiple exclusions in a single command line invocation. This is
-important because otherwise it's impossible to avoid really expensive --inits
-when you know you're going to delete most of the results
-
-ability to only include certain directories in the search with cwding to them
+ability to only include certain directories in the search without cwding to them
+(e.g. fts --search-in=alerts* the_alert)
 
 a partially created .fts.db breaks stuff. if --init fails or is ^C'd we should
 delete the file. n.b. that for a ^C after the init but during the sync, any

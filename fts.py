@@ -129,11 +129,11 @@ def main():
 
     ap.add_argument('--sync-one', metavar='filename', help="sync a single file (unlike the other commands, this one doesn't care about the current directory)")
 
-    ap.add_argument("--list-ignores", action='store_true')
-    ap.add_argument("--rm-ignore", type=int, metavar='ignoreid')
-    ap.add_argument("--ignore-re", metavar='re')
-    ap.add_argument("--ignore-simple", metavar='filename')
-    ap.add_argument('--ignore', "--ignore-glob", dest='ignore_glob', metavar='pattern')
+    ap.add_argument("--list-ignores", action='store_true', default=[])
+    ap.add_argument("--rm-ignore", type=int, metavar='ignoreid', action='append', default=[])
+    ap.add_argument("--ignore-re", metavar='re', action='append', default=[])
+    ap.add_argument("--ignore-simple", metavar='filename', action='append', default=[])
+    ap.add_argument('--ignore', "--ignore-glob", dest='ignore_glob', metavar='pattern', action='append', default=[])
 
     ap.add_argument('-r', '--re', '--regex', '--regexp', dest='searchmode',
                     default='MATCH', action="store_const", const='REGEXP',
@@ -197,19 +197,19 @@ def main():
 
     with conn:
         # all other top-level functions operate in one global transaction
-        if args.rm_ignore:
+        for a in args.rm_ignore:
             didsomething = True
-            rm_ignore(conn, args.rm_ignore)
+            rm_ignore(conn, a)
 
-        if args.ignore_re:
+        for a in args.ignore_re:
             didsomething = True
-            add_ignore(conn, 're', args.ignore_re)
-        if args.ignore_simple:
+            add_ignore(conn, 're', a)
+        for a in args.ignore_simple:
             didsomething = True
-            add_ignore(conn, 'simple', args.ignore_simple)
-        if args.ignore_glob:
+            add_ignore(conn, 'simple', a)
+        for a in args.ignore_glob:
             didsomething = True
-            add_ignore(conn, 'glob', args.ignore_glob)
+            add_ignore(conn, 'glob', a)
 
         if args.list_ignores:
             didsomething = True
