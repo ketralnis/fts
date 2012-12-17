@@ -1,5 +1,5 @@
 do the setup.py thing so that fts can be installed in /usr/local/bin. also make
-'fts' a shell script that falls fts.py instead of a symlink to it
+'fts' a shell script that calls fts.py instead of a symlink to it
 
 After adding exclusions, we tell them that they need to resync. But we should
 also automatically remove DB items that they've just now excluded (so that they
@@ -24,11 +24,15 @@ search
 
 a python test suite instead of this silly shell script
 
+a performance test script
+
 track file hashes so that we can avoid reindexing renamed or duplicate files?
 
 there are some definite performance advantages to combining 'files' and
 'files_fts', not least of which is that the search operation wouldn't require a
 join. Should look into this.
+
+chunking inserts should significantly improve initial indexing performance
 
 --and and or for multiple searches (right now, multiple searches are allowed but
 we print every result for every match, and can print the same file twice)
@@ -56,10 +60,3 @@ delete the file. n.b. that for a ^C after the init but during the sync, any
 specified --ignores (or other commands) will be in the failed implied sync's
 transaction and so will also fail. because of this we may want to delete the DB
 if we fail in the --sync implied by an --init as well
-
-I have a few million of emails that I index. I ignore --ignore=re a big set of
-monthly folders named like "alerts-2011-01jan" that are cron messages that I
-don't care about. But we still walk them and we still os.stat every single
-message. Because they're ignored, we then immediately delete them from the
-ondisk temporary table before reading out of any of their contents. There really
-needs to be a fix for this use-case
