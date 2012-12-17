@@ -8,8 +8,10 @@ import itertools
 from collections import namedtuple
 import argparse
 
+from ftsdb import re # re or re2
+
 from ftsdb import logger, Cursor
-from ftsdb import finddb, prefix_expr, getconfig
+from ftsdb import finddb, prefix_expr
 
 from ftsinit import init
 from ftssync import sync
@@ -203,6 +205,11 @@ def main():
 
         for a in args.ignore_re:
             didsomething = True
+            try:
+                re.compile(a)
+            except:
+                logging.error("Couldn't compile regex %r, are you sure it's valid?", a)
+                raise
             add_ignore(conn, 're', a)
         for a in args.ignore_simple:
             didsomething = True

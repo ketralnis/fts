@@ -7,10 +7,7 @@ from functools import partial
 import logging
 import fnmatch
 
-try:
-    import re2 as re
-except ImportError:
-    import re
+from ftsdb import re # re or re2
 
 from ftsdb import update_document, add_document, prefix_expr, logger, Cursor
 
