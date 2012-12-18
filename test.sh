@@ -21,6 +21,10 @@ search=$(cat $(ls rando/* | unsort | head -n 1) | unsort | head -n 1)
 echo test search "($search)"
 fts "$search"
 
+echo test search --re "($search)"
+fts --re "$search"
+
+
 echo more data
 ./rando.sh | sed 's/^/    /'
 
