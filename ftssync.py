@@ -114,6 +114,9 @@ def sync(conn, path, prefix, files = None):
         else:
             visitor(path, prefix, exclusions, cu, wpath, files)
 
+        logging.debug("Creating temporary index on ondisk(dbpath)")
+        c.execute("CREATE INDEX tmp_ondisk_dbpath_idx ON ondisk(dbpath)")
+
         if logger.getEffectiveLevel() <= logging.DEBUG:
             logger.debug("Found %d files", tcount(cu, "ondisk"))
 

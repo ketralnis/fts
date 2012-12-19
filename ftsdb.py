@@ -206,6 +206,8 @@ class Cursor(object):
         # logging.debug("%r", self.c.execute('EXPLAIN ' + stmt, *a, **kw).fetchall())
 
     def execute(self, stmt, *a, **kw):
+        if kw.pop('explain', False):
+            self.explain(stmt, *a, **kw)
         return self.c.execute(stmt, *a, **kw)
 
     @property
