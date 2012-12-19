@@ -189,12 +189,35 @@ def update_document(c, docid, last_modified, content):
                (content, docid))
 
 class Cursor(object):
+    """
+    Wrap sqlite's cursor interface
+    """
     def __init__(self, conn):
         self.conn = conn
 
     def __enter__(self):
-        c = self.c = self.conn.cursor()
-        return c
+        self.c = self.conn.cursor()
+        return self
+
+    def explain(self, stmt, *a, **kw):
+        rows = self.c.execute('EXPLAIN QUERY PLAN ' + stmt, *a, **kw).fetchall()
+        report = '\n'.join('\t\t'.join(map(str, r)) for r in rows)
+        logging.debug("EXPLAIN %r:\n%s", stmt, report)
+        # logging.debug("%r", self.c.execute('EXPLAIN ' + stmt, *a, **kw).fetchall())
+
+    def execute(self, stmt, *a, **kw):
+        return self.c.execute(stmt, *a, **kw)
+
+    @property
+    def lastrowid(self):
+        return self.c.lastrowid
+
+    @property
+    def rowcount(self):
+        return self.c.rowcount
+
+    def __iter__(self):
+        return self.c.__iter__()
 
     def __exit__(self, type, value, traceback):
         self.c.close()

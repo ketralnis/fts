@@ -100,7 +100,7 @@ def sync(conn, path, prefix, files = None):
 
         exclusions = []
         c.execute("SELECT type AS typ, expression AS e FROM exclusions;")
-        for typ, expression in c.fetchall():
+        for typ, expression in c:
             if typ == 're':
                 expression = re.compile(expression)
             exclusions.append((typ, expression))
