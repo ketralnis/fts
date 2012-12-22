@@ -1,4 +1,6 @@
 fts.db
 .fts.db
+.fts.db-*
 *.pyc
 rando
+*.swp
