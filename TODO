@@ -37,6 +37,8 @@ chunking inserts should significantly improve initial indexing performance
 --and and or for multiple searches (right now, multiple searches are allowed but
 we print every result for every match, and can print the same file twice)
 
+when doing multiple searches, we should scan the table only once and OR the queries together
+
 should version the schema
 
 unicode safety (we just naively turn everything to utf8 right now)

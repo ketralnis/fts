@@ -9,7 +9,7 @@ trap "rm -f $tmpf" EXIT
 fts --help
 
 echo creating data
-./rando.sh | sed 's/^/    /'
+./rando.py
 
 echo deleting old data
 rm -f .fts.db
@@ -26,13 +26,13 @@ fts --re "$search"
 
 
 echo more data
-./rando.sh | sed 's/^/    /'
+./rando.py
 
 echo test sync
 fts --sync
 
 echo more data
-./rando.sh | sed 's/^/    /'
+./rando.py
 pushd rando > /dev/null
 
     echo sync from in rando
