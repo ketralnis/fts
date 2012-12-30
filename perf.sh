@@ -1,5 +1,6 @@
 #!/bin/sh -e
 
+# add fts and rando.py to the $PATH
 export PATH=$PATH:$(pwd)
 
 numdirs=100
@@ -11,19 +12,29 @@ smallcycle=5
 bigcycle=150
 bigsearches=50
 
-tmpd=$(mktemp -d -t $(basename $0).$$)
-trap "rm -fr $tmpd" EXIT
+if [ -d bigrando ]; then
+    tmpd=$(pwd)/bigrando
+    cd $tmpd
+    echo using existing bigrando of $(find . -type f | wc -l) files in $(du -sh .)
+    echo deleting old .fts.db
+    rm -f ./.fts.db
 
-cd $tmpd
+else
 
-echo making large directory $tmpd
-mkdir $(seq 1 $numdirs)
-time for x in $(seq 1 $numdirs); do
-    cd $x
-    rando.py --initialcount $initialcount --minfsize $minfsize --maxfsize $maxfsize
-    cd ..
-done
-echo created $(find . -type f | wc -l) files in $(du -sh .)
+    tmpd=$(mktemp -d -t $(basename $0).$$)
+    trap "rm -fr $tmpd" EXIT
+
+    cd $tmpd
+
+    echo making large directory $tmpd
+    time for x in $(seq 1 $numdirs); do
+        mkdir $x
+        cd $
+        rando.py --initialcount $initialcount --mxinfsize $minfsize --maxfsize $maxfsize
+        cd ..
+    done
+    echo created $(find . -type f | wc -l) files in $(du -sh .)
+fi
 
 echo creating initial index
 time fts --init --sync

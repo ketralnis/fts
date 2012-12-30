@@ -71,7 +71,7 @@ def search(conn, prefix, term, mode, checksync = True, color=False):
                    snippet(ft.files_fts, ?, ?, ?, -1, -10)
               FROM files f, files_fts ft
              WHERE f.docid = ft.docid
-               AND (? = '' OR f.path LIKE ? ESCAPE '\\') -- use the prefix if present
+               AND (? = '' OR f.path LIKE ? ESCAPE '\\') -- use the prefix if present -- ESCAPE disables the LIKE optimization :(
                AND ft.body %(mode)s ?
           -- TODO: this runs simple_rank, which calls a Python function, many
           -- times per row. we can decompose this to a subselect to avoid this

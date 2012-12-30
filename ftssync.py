@@ -114,7 +114,7 @@ def sync(conn, path, prefix, files = None):
         else:
             visitor(path, prefix, exclusions, cu, wpath, files)
 
-        logging.debug("Creating temporary index on ondisk(dbpath)")
+        logger.debug("Creating temporary index on ondisk(dbpath)")
         c.execute("CREATE INDEX tmp_ondisk_dbpath_idx ON ondisk(dbpath)")
 
         if logger.getEffectiveLevel() <= logging.DEBUG:
@@ -125,7 +125,7 @@ def sync(conn, path, prefix, files = None):
 
         # updated ones
         cu.execute("""
-            CREATE TEMPORARY TABLE updated_files AS
+            CREATE TEMPORARY VIEW updated_files AS
             SELECT f.docid AS docid,
                    od.path AS path,
                    od.last_modified AS last_modified
@@ -138,26 +138,35 @@ def sync(conn, path, prefix, files = None):
 
         # new files to create
         cu.execute("""
-            CREATE TEMPORARY TABLE created_files AS
+            CREATE TEMPORARY VIEW created_files AS
             SELECT od.path AS path,
                    od.dbpath AS dbpath,
                    od.last_modified
               FROM ondisk od
-             WHERE od.dbpath NOT IN (SELECT path FROM files)
+             WHERE NOT EXISTS(SELECT 1 FROM files f1 WHERE od.dbpath = f1.path)
         """)
         if logger.getEffectiveLevel() <= logging.DEBUG:
             logger.debug("Prepared %d files for creation", tcount(cu, "created_files"))
 
         # files that we've indexed in the past but don't exist anymore
-        cu.execute("""
-            CREATE TEMPORARY TABLE deletedocs AS
-            SELECT f.docid AS docid
-              FROM files f
-             WHERE (? = '' OR f.path LIKE ? ESCAPE '\\')
-               AND f.path NOT IN (SELECT dbpath FROM ondisk od);
-        """, (prefix, prefix_expr(prefix),))
-        if logger.getEffectiveLevel() <= logging.DEBUG:
-            logger.debug("Prepared %d files for deletion", tcount(cu, "deletedocs"))
+        if files is None:
+            cu.execute("""
+                CREATE TEMPORARY TABLE deletedocs AS
+                SELECT f.docid AS docid
+                  FROM files f
+                 WHERE (? = '' OR f.path LIKE ? ESCAPE '\\') -- ESCAPE disables the LIKE optimization :(
+                   AND NOT EXISTS(SELECT 1 FROM ondisk od WHERE od.dbpath = f.path)
+            """, (prefix, prefix_expr(prefix)))
+            cu.execute("""
+                DELETE FROM files WHERE docid IN (SELECT docid FROM deletedocs);
+            """)
+            cu.execute("""
+                DELETE FROM files_fts WHERE docid IN (SELECT docid FROM deletedocs);
+            """)
+
+            deletes = cu.rowcount
+
+            cu.execute("DROP TABLE deletedocs;")
 
         # set up our debugging progress-printing closure
         def printprogress(*a):
@@ -183,15 +192,6 @@ def sync(conn, path, prefix, files = None):
                 continue
             updates += 1
 
-        if files is None:
-            # don't delete non-matching files if we've been given a specific
-            # list of files to update
-            c.execute("DELETE FROM files WHERE docid IN (SELECT docid FROM deletedocs);")
-            del1 = c.rowcount
-            c.execute("DELETE FROM files_fts WHERE docid IN (SELECT docid FROM deletedocs);")
-            del2 = c.rowcount
-            deletes = max(del1, del2)
-
         # new files to create
         c.execute("SELECT path, dbpath, last_modified FROM created_files;")
         for (fname, dbpath, last_modified) in c:
@@ -211,7 +211,6 @@ def sync(conn, path, prefix, files = None):
 
         logger.info("%d new documents, %d deletes, %d updates in %.2fs", news, deletes, updates, time.time()-start)
 
-        cu.execute("DROP TABLE updated_files;")
-        cu.execute("DROP TABLE created_files;")
-        cu.execute("DROP TABLE deletedocs;")
+        cu.execute("DROP VIEW updated_files;")
+        cu.execute("DROP VIEW created_files;")
         cu.execute("DROP TABLE ondisk;")

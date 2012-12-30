@@ -62,3 +62,5 @@ delete the file. n.b. that for a ^C after the init but during the sync, any
 specified --ignores (or other commands) will be in the failed implied sync's
 transaction and so will also fail. because of this we may want to delete the DB
 if we fail in the --sync implied by an --init as well
+
+make the LIKE optimisation work, or work around it
