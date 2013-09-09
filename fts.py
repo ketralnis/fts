@@ -129,7 +129,9 @@ def main():
         if args.optimize:
             didsomething = True
             with Cursor(conn) as c:
+                logger.debug("OPTIMIZE")
                 c.execute("INSERT INTO files_fts(files_fts) values('optimize');")
+                logger.debug("VACUUM ANALYZE;")
                 c.execute("VACUUM ANALYZE;")
 
         for term in args.search:

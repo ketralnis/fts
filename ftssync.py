@@ -1,15 +1,38 @@
 import os
+import contextlib
 import os.path
 import errno
 import stat
 import time
+import mmap
 from functools import partial
 import logging
 import fnmatch
 
 from ftsdb import re # re or re2
 
-from ftsdb import update_document, add_document, prefix_expr, logger, Cursor
+from ftsdb import update_document, add_document, remove_document
+from ftsdb import prefix_expr, logger, Cursor
+
+# nly index the first N bytes of a file
+MAX_FSIZE = 1024*1024
+
+@contextlib.contextmanager
+def get_bytes(fname, size):
+    """
+    yield a python Buffer mapping to the first MAX_FSIZE bytes of the given file
+    """
+    size = min(size, MAX_FSIZE)
+
+    if size == 0:
+        yield ''
+        return
+
+    # try to save some memory by using the OS buffers instead of copying
+    # the file contents
+    with open(fname, 'rb') as f:
+        with contextlib.closing(mmap.mmap(f.fileno(), size, access=mmap.ACCESS_READ)) as mm:
+            yield buffer(mm, 0, size)
 
 def should_allow(exclusions, basename, dbpath):
     """
@@ -58,6 +81,7 @@ def visitor(path, prefix, exclusions, cu, dirname, fnames):
         try:
             st = os.stat(fname)
             mode = st.st_mode
+            size = st[stat.ST_SIZE]
             if stat.S_ISDIR(mode):
                 continue
             if not stat.S_ISREG(mode):
@@ -69,8 +93,8 @@ def visitor(path, prefix, exclusions, cu, dirname, fnames):
                 continue
             raise
 
-        cu.execute("INSERT INTO ondisk(path, dbpath, last_modified) VALUES (?, ?, ?)",
-                   (fname, dbfname, int(st[stat.ST_MTIME])))
+        cu.execute("INSERT INTO ondisk(path, dbpath, last_modified, size) VALUES (?, ?, ?, ?)",
+                   (fname, dbfname, int(st[stat.ST_MTIME]), size))
 
     if remove and logger.getEffectiveLevel() <= logging.DEBUG:
         logger.debug("Removing %r from walk", list(remove))
@@ -87,6 +111,7 @@ def sync(conn, path, prefix, files = None):
     start = time.time()
 
     news = updates = deletes = 0
+    tnews = tupdates = tdeletes = 0 # for debug printing
 
     with Cursor(conn) as c, Cursor(conn) as cu:
         c.execute("""
@@ -94,7 +119,8 @@ def sync(conn, path, prefix, files = None):
                   ondisk (
                      path          TEXT PRIMARY KEY COLLATE BINARY,
                      dbpath        TEXT COLLATE BINARY,
-                     last_modified INTEGER
+                     last_modified INTEGER,
+                     size          INTEGER
                   );
                   """)
 
@@ -118,7 +144,7 @@ def sync(conn, path, prefix, files = None):
         c.execute("CREATE INDEX tmp_ondisk_dbpath_idx ON ondisk(dbpath)")
 
         if logger.getEffectiveLevel() <= logging.DEBUG:
-            logger.debug("Found %d files", tcount(cu, "ondisk"))
+            logger.debug("Found %d files on disk", tcount(cu, "ondisk"))
 
         # now build three groups: new files to be added, missing files to be
         # deleted, and old files to be updated
@@ -128,62 +154,71 @@ def sync(conn, path, prefix, files = None):
             CREATE TEMPORARY VIEW updated_files AS
             SELECT f.docid AS docid,
                    od.path AS path,
-                   od.last_modified AS last_modified
+                   od.last_modified AS last_modified,
+                   od.size AS size
               FROM ondisk od, files f
              WHERE od.dbpath = f.path
                AND f.last_modified < od.last_modified
         """)
         if logger.getEffectiveLevel() <= logging.DEBUG:
-            logger.debug("Prepared %d files for updating", tcount(cu, "updated_files"))
+            tupdates = tcount(cu, "updated_files")
+            logger.debug("Prepared %d files for updating", tupdates)
 
         # new files to create
         cu.execute("""
             CREATE TEMPORARY VIEW created_files AS
             SELECT od.path AS path,
                    od.dbpath AS dbpath,
-                   od.last_modified
+                   od.last_modified,
+                   od.size AS size
               FROM ondisk od
              WHERE NOT EXISTS(SELECT 1 FROM files f1 WHERE od.dbpath = f1.path)
         """)
         if logger.getEffectiveLevel() <= logging.DEBUG:
-            logger.debug("Prepared %d files for creation", tcount(cu, "created_files"))
+            tnews = tcount(cu, "created_files")
+            logger.debug("Prepared %d files for creation", tnews)
 
         # files that we've indexed in the past but don't exist anymore
         if files is None:
+            # has to be a table instead of a view because parameters aren't allowed in views
             cu.execute("""
                 CREATE TEMPORARY TABLE deletedocs AS
-                SELECT f.docid AS docid
+                SELECT f.docid AS docid,
+                       f.path AS path
                   FROM files f
                  WHERE (? = '' OR f.path LIKE ? ESCAPE '\\') -- ESCAPE disables the LIKE optimization :(
                    AND NOT EXISTS(SELECT 1 FROM ondisk od WHERE od.dbpath = f.path)
             """, (prefix, prefix_expr(prefix)))
-            cu.execute("""
-                DELETE FROM files WHERE docid IN (SELECT docid FROM deletedocs);
-            """)
-            cu.execute("""
-                DELETE FROM files_fts WHERE docid IN (SELECT docid FROM deletedocs);
-            """)
-
-            deletes = cu.rowcount
-
-            cu.execute("DROP TABLE deletedocs;")
+            if logger.getEffectiveLevel() <= logging.DEBUG:
+                tdeletes = tcount(cu, "deletedocs")
+                logger.debug("Prepared %d files for deletion", tdeletes)
 
         # set up our debugging progress-printing closure
         def printprogress(*a):
             pass
         if logger.getEffectiveLevel() <= logging.INFO:
-            progresstotal = tcount(cu, "updated_files") + tcount(cu, "created_files")
+            progresstotal = tnews + tupdates + tdeletes
             if progresstotal > 0:
-                def printprogress(s, updates, news, fname):
-                    total = updates+news
-                    percent = float(updates+news)/progresstotal*100
+                def printprogress(s, fname):
+                    total = updates+news+deletes
+                    percent = float(total)/progresstotal*100
                     logger.info("%d/%d (%.1f%%) %s: %s", total, progresstotal, percent, s, fname)
 
-        c.execute("SELECT docid, path, last_modified FROM updated_files;")
-        for (docid, fname, last_modified) in c:
-            printprogress("Updating", updates, news, fname)
+        # files that we've indexed in the past but don't exist anymore
+        if files is None:
+            c.execute("SELECT docid, path FROM deletedocs");
+            for (docid, fname) in c:
+                printprogress("Deleting", fname)
+                remove_document(cu, docid)
+
+                deletes += 1
+
+        c.execute("SELECT docid, path, last_modified, size FROM updated_files;")
+        for (docid, fname, last_modified, size) in c:
+            printprogress("Updating %.2f" % (size/1024.0), fname)
             try:
-                update_document(cu, docid, last_modified, open(fname).read())
+                with get_bytes(fname, size) as bb:
+                    update_document(cu, docid, last_modified, bb)
             except IOError as e:
                 if e.errno in (errno.ENOENT, errno.EPERM):
                     logger.warning("Skipping %s: %s", fname, os.strerror(e.errno))
@@ -193,14 +228,15 @@ def sync(conn, path, prefix, files = None):
             updates += 1
 
         # new files to create
-        c.execute("SELECT path, dbpath, last_modified FROM created_files;")
-        for (fname, dbpath, last_modified) in c:
+        c.execute("SELECT path, dbpath, last_modified, size FROM created_files;")
+        for (fname, dbpath, last_modified, size) in c:
             # is it safe to re-use the last_modified that we got before, or do
             # we need to re-stat() the file? reusing it like this could make a
             # race-condition whereby we never re-update that file
-            printprogress("Adding", updates, news, fname)
+            printprogress("Adding %.1fk" % (size/1024.0), fname)
             try:
-                add_document(cu, dbpath, last_modified, open(fname).read())
+                with get_bytes(fname, size) as bb:
+                    add_document(cu, dbpath, last_modified, bb)
             except IOError as e:
                 if e.errno in (errno.ENOENT, errno.EPERM):
                     logger.warning("Skipping %s: %s", fname, os.strerror(e.errno))
@@ -213,4 +249,5 @@ def sync(conn, path, prefix, files = None):
 
         cu.execute("DROP VIEW updated_files;")
         cu.execute("DROP VIEW created_files;")
+        cu.execute("DROP TABLE IF EXISTS deletedocs;")
         cu.execute("DROP TABLE ondisk;")
